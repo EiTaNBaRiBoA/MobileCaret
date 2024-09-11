@@ -1,0 +1,33 @@
+[gd_scene load_steps=3 format=3 uid="uid://drn0vrtfhsgwp"]
+
+[ext_resource type="Script" path="res://addons/MobileCaret/mobile_caret.gd" id="1_s61ly"]
+[ext_resource type="Texture2D" uid="uid://hfvcl4kw52d8" path="res://icon.svg" id="2_w4hwp"]
+
+[node name="mobile_caret" type="Control" node_paths=PackedStringArray("caret_one")]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_s61ly")
+caret_one = NodePath("caret_one")
+
+[node name="caret_one" type="TextureButton" parent="."]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -32.0
+offset_right = 96.0
+offset_bottom = 128.0
+grow_horizontal = 2
+scale = Vector2(0.5, 0.5)
+texture_normal = ExtResource("2_w4hwp")
+texture_pressed = ExtResource("2_w4hwp")
+texture_hover = ExtResource("2_w4hwp")
+texture_disabled = ExtResource("2_w4hwp")
+texture_focused = ExtResource("2_w4hwp")
+
+[node name="caret_two" type="TextureButton" parent="."]
+visible = false
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+texture_normal = ExtResource("2_w4hwp")

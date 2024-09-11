@@ -1,0 +1,87 @@
+[gd_scene load_steps=5 format=3 uid="uid://bh7oe51jp8ueg"]
+
+[ext_resource type="PackedScene" uid="uid://drn0vrtfhsgwp" path="res://addons/MobileCaret/mobile_caret.tscn" id="1_vncob"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_phk0k"]
+bg_color = Color(1, 1, 1, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_iwc8h"]
+bg_color = Color(0.903598, 0.903598, 0.903598, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_n8j2d"]
+bg_color = Color(0.903598, 0.903598, 0.903598, 1)
+
+[node name="ExampleScene" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_phk0k")
+
+[node name="MarginContainer" type="MarginContainer" parent="Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 50
+theme_override_constants/margin_top = 50
+theme_override_constants/margin_right = 50
+theme_override_constants/margin_bottom = 50
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer"]
+layout_mode = 2
+
+[node name="LineEditTitle" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 36
+text = "LineEdit test"
+
+[node name="LineEdit" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/caret_color = Color(0, 0, 0, 1)
+theme_override_colors/font_placeholder_color = Color(0.67069, 0.67069, 0.67069, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_colors/font_selected_color = Color(1, 1, 1, 1)
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 126
+theme_override_styles/focus = SubResource("StyleBoxFlat_iwc8h")
+theme_override_styles/read_only = SubResource("StyleBoxFlat_iwc8h")
+theme_override_styles/normal = SubResource("StyleBoxFlat_iwc8h")
+placeholder_text = "Write text here...."
+caret_blink = true
+
+[node name="TextEditTitle" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 36
+text = "LineEdit test"
+
+[node name="TextEdit" type="TextEdit" parent="Panel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+theme_override_colors/font_placeholder_color = Color(0.505344, 0.505344, 0.505344, 1)
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_colors/font_selected_color = Color(1, 1, 1, 1)
+theme_override_colors/caret_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 16
+theme_override_styles/normal = SubResource("StyleBoxFlat_n8j2d")
+theme_override_styles/focus = SubResource("StyleBoxFlat_n8j2d")
+theme_override_styles/read_only = SubResource("StyleBoxFlat_n8j2d")
+placeholder_text = "Write text here..."
+wrap_mode = 1
+caret_blink = true
+
+[node name="mobile_caret" parent="." instance=ExtResource("1_vncob")]
