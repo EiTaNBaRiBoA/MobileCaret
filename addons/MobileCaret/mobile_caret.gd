@@ -96,30 +96,38 @@ func move_caret_selected() -> void:
 	else:
 		# Update caret_one's x position to follow the mouse
 		selected_controller.global_position.x = get_global_mouse_position().x
+		var new_caret_pos: int = calculate_caret_letter_index(selected_controller)
 
-		# Calculate the offset to position caret_one relative to the LineEdit/TextEdit's origin
-		var caret_offset: float = line_edit.global_position.x + _get_text_offset().x
-		# Get the effective font size (accounting for theme overrides)
-		var current_font_size: int = _get_font_size(line_edit)
-		# Calculate the relative x distance between the mouse and the LineEdit/TextEdit's left edge
-		var rel_x = selected_controller.global_position.x - caret_offset - image_offset_caret.x - _calculate_x_pos(current_font_size)
-		# Find the new caret position based on the relative x distance
-		var new_caret_pos: int = 0
-		for i in range(len(line_edit.text) + 1):
-			if _get_caret_position_in_text(i).x < rel_x:
-				new_caret_pos = i
-			else:
-				break
 		# Update the LineEdit/TextEdit's caret position
 		line_edit.set_caret_column(new_caret_pos)
+		
+		# Checking if there are two carets away from each other
+		if selected_controller != null:
+			select_text(new_caret_pos)
 
-
+## Setting the selected caret to be able to move it and grab focus of line edit
 func set_selected_caret(focus_owner: BaseButton) -> void:
 		_is_selecting = true
 		line_edit.grab_focus()
 		selected_controller = focus_owner.get_parent() as ControllerCaret
 		controller_two.show_caret()
 
+
+## Responsible to select text when moving two carets away from each other
+func select_text(selected_caret_pos: int) -> void:
+	var other_caret_pos: int = 0
+	if selected_controller != controller_one:
+		other_caret_pos = calculate_caret_letter_index(controller_one)
+	else:
+		other_caret_pos = calculate_caret_letter_index(controller_two)
+	var min_letter: int = min(other_caret_pos, selected_caret_pos)
+	var max_letter: int = max(other_caret_pos, selected_caret_pos)
+	if line_edit is LineEdit:
+		##FIXME lineedit jumps on selection
+		line_edit.select(min_letter, max_letter)
+	elif line_edit is TextEdit:
+		##FIXME row and selection don't work
+		pass
 
 #region private functions
 # Calculate the vertical offset to position caret_one relative to the baseline
@@ -147,13 +155,30 @@ func _get_font_size(line_edit: Control) -> int:
 	else:
 		return line_edit.get_theme_default_font_size()
 
-func _enable_caret(enable_caret : bool) -> void:
+
+func calculate_caret_letter_index(controller_caret: ControllerCaret) -> int:
+	# Calculate the offset to position caret_one relative to the LineEdit/TextEdit's origin
+	var caret_offset: float = line_edit.global_position.x + _get_text_offset().x
+	# Get the effective font size (accounting for theme overrides)
+	var current_font_size: int = _get_font_size(line_edit)
+	# Calculate the relative x distance between the mouse and the LineEdit/TextEdit's left edge
+	var rel_x = controller_caret.global_position.x - caret_offset - image_offset_caret.x - _calculate_x_pos(current_font_size)
+	# Find the new caret position based on the relative x distance
+	var new_caret_pos: int = 0
+	for i in range(len(line_edit.text) + 1):
+		if _get_caret_position_in_text(i).x < rel_x:
+			new_caret_pos = i
+		else:
+			break
+	return new_caret_pos
+
+func _enable_caret(enable_caret: bool) -> void:
 	if line_edit.has_theme_color_override("caret_color"):
-		var color : Color = line_edit.get_theme_color("caret_color")
+		var color: Color = line_edit.get_theme_color("caret_color")
 		if enable_caret:
 			color.a = 1
 		else: color.a = 0
-		line_edit.add_theme_color_override("caret_color",color)
+		line_edit.add_theme_color_override("caret_color", color)
 	
 
 # Get the position of the text caret in pixels , i won't be -1 is for the moving caret texture
