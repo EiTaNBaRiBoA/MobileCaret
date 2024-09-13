@@ -37,28 +37,31 @@ func _process(_delta: float) -> void:
 		if not _is_selecting:
 			if selected_controller == controller_one:
 				#If selected caret is the first controller, don't move the second one
-				move_caret_under_text(focus_owner,controller_one)
+				move_caret_under_text(focus_owner, controller_one)
 			elif selected_controller == controller_two:
 				#If selected caret is the second controller, don't move the first one
-				move_caret_under_text(focus_owner,controller_two)
+				move_caret_under_text(focus_owner, controller_two)
 			else:
 				# If no selected caret was made
-				move_caret_under_text(focus_owner,controller_one)
-				move_caret_under_text(focus_owner,controller_two)
+				# Store a reference to the focused LineEdit/TextEdit
+				line_edit = focus_owner
+
+				move_caret_under_text(focus_owner, controller_one)
+				move_caret_under_text(focus_owner, controller_two)
+				# Enable blinking of the default text caret
+				line_edit.set_caret_blink_enabled(true)
+				_enable_caret(true)
 		else:
 			# Moves the selected_controller that was picked in elif
 			move_caret_selected()
 	# If a BaseButton is focused, initiate text selection in the previously focused LineEdit/TextEdit
 	elif focus_owner is BaseButton and (focus_owner == controller_one.caret or focus_owner == controller_two.caret):
 		set_selected_caret(focus_owner)
-	elif  focus_owner == line_edit and Input.is_action_just_pressed('click'):
+	elif (focus_owner is LineEdit or focus_owner is TextEdit) and Input.is_action_just_pressed('click'):
 		#  remove two carets if just selected on a text without selecting on the caret
 		selected_controller = null
 ## Responsible to move caret under text when typing and not selecting the caret
-func move_caret_under_text(focus_owner: Control, controller : ControllerCaret) -> void:
-		# Store a reference to the focused LineEdit/TextEdit
-	line_edit = focus_owner
-
+func move_caret_under_text(focus_owner: Control, controller: ControllerCaret) -> void:
 	# Get the font used by the LineEdit/TextEdit
 	if focus_owner is LineEdit:
 		font = line_edit.get_theme_font('font', 'LineEdit')
@@ -83,20 +86,14 @@ func move_caret_under_text(focus_owner: Control, controller : ControllerCaret) -
 		caret_pos.y + caret_offset.y + _calculate_y_pos(current_font_size)
 	)
 
-	# Enable blinking of the default text caret
-	line_edit.set_caret_blink_enabled(true)
-
 ## Handles clicking on the caret and moving it
 func move_caret_selected() -> void:
+	_enable_caret(false)
 	# Handle text selection logic 
 	if Input.is_action_just_released('click'):
 		# End selection and re-enable caret blinking
 		_is_selecting = false
-		line_edit.set_caret_blink_enabled(true)
 	else:
-		# Disable caret blinking during selection
-		line_edit.set_caret_blink_enabled(false)
-
 		# Update caret_one's x position to follow the mouse
 		selected_controller.global_position.x = get_global_mouse_position().x
 
@@ -149,6 +146,15 @@ func _get_font_size(line_edit: Control) -> int:
 		return line_edit.get_theme_font_size("font_size")
 	else:
 		return line_edit.get_theme_default_font_size()
+
+func _enable_caret(enable_caret : bool) -> void:
+	if line_edit.has_theme_color_override("caret_color"):
+		var color : Color = line_edit.get_theme_color("caret_color")
+		if enable_caret:
+			color.a = 1
+		else: color.a = 0
+		line_edit.add_theme_color_override("caret_color",color)
+	
 
 # Get the position of the text caret in pixels , i won't be -1 is for the moving caret texture
 func _get_caret_position_in_text(i: int = -1) -> Vector2:
