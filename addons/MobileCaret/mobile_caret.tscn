@@ -1,15 +1,24 @@
-[gd_scene load_steps=3 format=3 uid="uid://drn0vrtfhsgwp"]
+[gd_scene load_steps=4 format=3 uid="uid://drn0vrtfhsgwp"]
 
 [ext_resource type="Script" path="res://addons/MobileCaret/mobile_caret.gd" id="1_s61ly"]
 [ext_resource type="Texture2D" uid="uid://hfvcl4kw52d8" path="res://icon.svg" id="2_w4hwp"]
+[ext_resource type="Script" path="res://addons/MobileCaret/Controllers/ControllerCaret.gd" id="2_yyk6c"]
 
-[node name="mobile_caret" type="Control" node_paths=PackedStringArray("caret_one")]
+[node name="mobile_caret" type="Control" node_paths=PackedStringArray("controller_one", "controller_two")]
 layout_mode = 3
 anchors_preset = 0
 script = ExtResource("1_s61ly")
-caret_one = NodePath("caret_one")
+texture_caret = ExtResource("2_w4hwp")
+controller_one = NodePath("controller_one")
+controller_two = NodePath("controller_two")
 
-[node name="caret_one" type="TextureButton" parent="."]
+[node name="controller_one" type="Control" parent="." node_paths=PackedStringArray("caret")]
+layout_mode = 1
+anchors_preset = 0
+script = ExtResource("2_yyk6c")
+caret = NodePath("caret_one")
+
+[node name="caret_one" type="TextureButton" parent="controller_one"]
 layout_mode = 1
 anchors_preset = 5
 anchor_left = 0.5
@@ -25,9 +34,24 @@ texture_hover = ExtResource("2_w4hwp")
 texture_disabled = ExtResource("2_w4hwp")
 texture_focused = ExtResource("2_w4hwp")
 
-[node name="caret_two" type="TextureButton" parent="."]
-visible = false
-layout_mode = 0
-offset_right = 40.0
-offset_bottom = 40.0
+[node name="controller_two" type="Control" parent="." node_paths=PackedStringArray("caret")]
+layout_mode = 1
+anchors_preset = 0
+script = ExtResource("2_yyk6c")
+caret = NodePath("caret_two")
+
+[node name="caret_two" type="TextureButton" parent="controller_two"]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -32.0
+offset_right = 96.0
+offset_bottom = 128.0
+grow_horizontal = 2
+scale = Vector2(0.5, 0.5)
 texture_normal = ExtResource("2_w4hwp")
+texture_pressed = ExtResource("2_w4hwp")
+texture_hover = ExtResource("2_w4hwp")
+texture_disabled = ExtResource("2_w4hwp")
+texture_focused = ExtResource("2_w4hwp")
