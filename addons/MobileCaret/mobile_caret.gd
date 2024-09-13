@@ -123,7 +123,6 @@ func select_text(selected_caret_pos: int) -> void:
 	var min_letter: int = min(other_caret_pos, selected_caret_pos)
 	var max_letter: int = max(other_caret_pos, selected_caret_pos)
 	if line_edit is LineEdit:
-		##FIXME lineedit jumps on selection
 		line_edit.select(min_letter, max_letter)
 	elif line_edit is TextEdit:
 		##FIXME row and selection don't work
@@ -166,7 +165,7 @@ func calculate_caret_letter_index(controller_caret: ControllerCaret) -> int:
 	# Find the new caret position based on the relative x distance
 	var new_caret_pos: int = 0
 	for i in range(len(line_edit.text) + 1):
-		if _get_caret_position_in_text(i).x < rel_x:
+		if _get_caret_position_in_text(i).x <= rel_x:
 			new_caret_pos = i
 		else:
 			break
