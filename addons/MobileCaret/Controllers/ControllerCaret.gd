@@ -1,7 +1,7 @@
 extends Control
 class_name ControllerCaret
 @export var caret : TextureButton
-
+@export var controller_pos : Vector2 = Vector2.ZERO
 
 func set_caret_texture(texture2D : Texture2D) -> void:
 	caret.texture_normal = texture2D

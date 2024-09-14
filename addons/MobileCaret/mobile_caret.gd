@@ -35,19 +35,13 @@ func _process(_delta: float) -> void:
 	# Check if the focused control is a LineEdit or TextEdit
 	if (focus_owner is LineEdit or focus_owner is TextEdit) and not Input.is_action_just_pressed('click'):
 		if not _is_selecting:
-			if selected_controller == controller_one:
-				#If selected caret is the first controller, don't move the second one
-				move_caret_under_text(focus_owner, controller_one)
-			elif selected_controller == controller_two:
-				#If selected caret is the second controller, don't move the first one
-				move_caret_under_text(focus_owner, controller_two)
-			else:
 				# If no selected caret was made
 				# Store a reference to the focused LineEdit/TextEdit
 				line_edit = focus_owner
-
-				move_caret_under_text(focus_owner, controller_one)
-				move_caret_under_text(focus_owner, controller_two)
+				if selected_controller != controller_one:
+					move_controller_under_text_typing(focus_owner, controller_one)
+				if selected_controller != controller_two:
+					move_controller_under_text_typing(focus_owner, controller_two)
 				# Enable blinking of the default text caret
 				line_edit.set_caret_blink_enabled(true)
 				_enable_caret(true)
@@ -64,9 +58,8 @@ func _process(_delta: float) -> void:
 			line_edit.deselect()
 
 
-
 ## Responsible to move caret under text when typing and not selecting the caret
-func move_caret_under_text(focus_owner: Control, controller: ControllerCaret) -> void:
+func move_controller_under_text_typing(focus_owner: Control, controller: ControllerCaret) -> void:
 	# Get the font used by the LineEdit/TextEdit
 	if focus_owner is LineEdit:
 		font = line_edit.get_theme_font('font', 'LineEdit')
@@ -90,48 +83,75 @@ func move_caret_under_text(focus_owner: Control, controller: ControllerCaret) ->
 		caret_pos.x + caret_offset.x + _calculate_x_pos(current_font_size),
 		caret_pos.y + caret_offset.y + _calculate_y_pos(current_font_size)
 	)
+## setting position of a controller under words like if there was a caret
+func move_controller_under_words() -> void:
+	var caret_pos: Vector2 = _get_caret_position_in_text(selected_controller.controller_pos.x* selected_controller.controller_pos.y)
+	# Calculate the offset to position caret_one relative to the LineEdit/TextEdit's origin
+	var caret_offset: Vector2 = line_edit.global_position + _get_text_offset()
+	# Get the effective font size (accounting for theme overrides)
+	var current_font_size: int = _get_font_size(line_edit)
+	# Calculate the final global position of caret_one
+	selected_controller.global_position = Vector2(
+		caret_pos.x + caret_offset.x + _calculate_x_pos(current_font_size),
+		caret_pos.y + caret_offset.y + _calculate_y_pos(current_font_size)
+	)
 
 ## Handles clicking on the caret and moving it
 func move_caret_selected() -> void:
 	_enable_caret(false)
 	# Handle text selection logic 
 	if Input.is_action_just_released('click'):
+		move_controller_under_words()
 		# End selection and re-enable caret blinking
 		_is_selecting = false
 	else:
 		# Update caret_one's x position to follow the mouse
-		selected_controller.global_position.x = get_global_mouse_position().x
-		var new_caret_pos: int = calculate_caret_letter_index(selected_controller)
+		var node_caret_old_pos: Vector2 = Vector2.ZERO
+		var new_node_caret_pos: Vector2 = Vector2.ZERO
+		if line_edit is LineEdit:
+			node_caret_old_pos.x = line_edit.caret_column
+			selected_controller.global_position.x = get_global_mouse_position().x
+			selected_controller.controller_pos.x = calculate_node_caret_x_pos(selected_controller)
+			selected_controller.controller_pos.y = 1
+		elif line_edit is TextEdit:
+			selected_controller.global_position = get_global_mouse_position()
+			node_caret_old_pos = Vector2(line_edit.get_caret_column(), line_edit.get_caret_line())
+			selected_controller.controller_pos = Vector2(calculate_node_caret_x_pos(selected_controller), calculate_node_caret_y_pos(selected_controller))
 
-		# Update the LineEdit/TextEdit's caret position
-		line_edit.set_caret_column(new_caret_pos)
-		
 		# Checking if there are two carets away from each other
 		if selected_controller != null:
-			select_text(new_caret_pos)
+			select_text(node_caret_old_pos, selected_controller.controller_pos)
 
 ## Setting the selected caret to be able to move it and grab focus of line edit
 func set_selected_caret(focus_owner: BaseButton) -> void:
+		if selected_controller:
+			var new_node_caret_pos = Vector2(calculate_node_caret_x_pos(selected_controller), calculate_node_caret_y_pos(selected_controller))
+			set_node_caret_pos(new_node_caret_pos)
 		_is_selecting = true
 		line_edit.grab_focus()
 		selected_controller = focus_owner.get_parent() as ControllerCaret
 		controller_two.show_caret()
 
 
-## Responsible to select text when moving two carets away from each other
-func select_text(selected_caret_pos: int) -> void:
-	var other_caret_pos: int = 0
-	if selected_controller != controller_one:
-		other_caret_pos = calculate_caret_letter_index(controller_one)
-	else:
-		other_caret_pos = calculate_caret_letter_index(controller_two)
-	var min_letter: int = min(other_caret_pos, selected_caret_pos)
-	var max_letter: int = max(other_caret_pos, selected_caret_pos)
+## Setting the actual caret of the line_edit node
+func set_node_caret_pos(new_node_caret_pos: Vector2) -> void:
 	if line_edit is LineEdit:
-		line_edit.select(min_letter, max_letter)
+		line_edit.set_caret_column(new_node_caret_pos.x)
 	elif line_edit is TextEdit:
-		##FIXME row and selection don't work
-		pass
+		line_edit.set_caret_column(new_node_caret_pos.x)
+		line_edit.set_caret_line(new_node_caret_pos.y)
+
+
+## Responsible to select text when moving two carets away from each other
+func select_text(node_caret_old_pos: Vector2, new_node_caret_pos: Vector2) -> void:
+	var min_column: int = min(node_caret_old_pos.x, new_node_caret_pos.x)
+	var max_column: int = max(node_caret_old_pos.x, new_node_caret_pos.x)
+	var min_line: int = min(node_caret_old_pos.y, new_node_caret_pos.y)
+	var max_line: int = max(node_caret_old_pos.y, new_node_caret_pos.y)
+	if line_edit is LineEdit:
+		line_edit.select(min_column, max_column)
+	elif line_edit is TextEdit:
+		line_edit.select(min_line, min_column, max_line, max_column)
 
 #region private functions
 # Calculate the vertical offset to position caret_one relative to the baseline
@@ -159,8 +179,8 @@ func _get_font_size(line_edit: Control) -> int:
 	else:
 		return line_edit.get_theme_default_font_size()
 
-
-func calculate_caret_letter_index(controller_caret: ControllerCaret) -> int:
+#region Calculation Node Caret Pos
+func calculate_node_caret_x_pos(controller_caret: ControllerCaret) -> int:
 	# Calculate the offset to position caret_one relative to the LineEdit/TextEdit's origin
 	var caret_offset: float = line_edit.global_position.x + _get_text_offset().x
 	# Get the effective font size (accounting for theme overrides)
@@ -175,6 +195,23 @@ func calculate_caret_letter_index(controller_caret: ControllerCaret) -> int:
 		else:
 			break
 	return new_caret_pos
+#region Calculation Node Caret Pos
+func calculate_node_caret_y_pos(controller_caret: ControllerCaret) -> int:
+	if line_edit is TextEdit:
+		var caret_offset: float = line_edit.global_position.y + _get_text_offset().y
+		var current_font_size: int = _get_font_size(line_edit)
+		var line_height: float = font.get_string_size("A", _get_text_alignment(), -1, current_font_size).y
+		var rel_y = controller_caret.global_position.y - caret_offset - _calculate_y_pos(current_font_size)
+
+		# Find the line number based on the relative y position
+		var new_caret_line: int = int(rel_y / line_height)
+
+		# Clamp the line number to be within the valid range
+		new_caret_line = clamp(new_caret_line, 0, line_edit.get_line_count() - 1)
+
+		return new_caret_line
+	return 0
+#endregion
 
 func _enable_caret(enable_caret: bool) -> void:
 	if line_edit.has_theme_color_override("caret_color"):
@@ -186,13 +223,13 @@ func _enable_caret(enable_caret: bool) -> void:
 	
 
 # Get the position of the text caret in pixels , i won't be -1 is for the moving caret texture
-func _get_caret_position_in_text(i: int = -1) -> Vector2:
+func _get_caret_position_in_text(controller_pos_scalar: int = -1) -> Vector2:
 	var caret_column: int = line_edit.get_caret_column()
 	var text_before_caret: String = ""
-	if i == -1:
+	if controller_pos_scalar == -1:
 		text_before_caret = line_edit.text.substr(0, caret_column)
 	else:
-		text_before_caret = line_edit.text.substr(0, i)
+		text_before_caret = line_edit.text.substr(0, controller_pos_scalar)
 
 	var current_font_size: int = _get_font_size(line_edit)
 
