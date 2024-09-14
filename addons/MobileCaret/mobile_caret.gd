@@ -57,9 +57,14 @@ func _process(_delta: float) -> void:
 	# If a BaseButton is focused, initiate text selection in the previously focused LineEdit/TextEdit
 	elif focus_owner is BaseButton and (focus_owner == controller_one.caret or focus_owner == controller_two.caret):
 		set_selected_caret(focus_owner)
-	elif (focus_owner is LineEdit or focus_owner is TextEdit) and Input.is_action_just_pressed('click'):
+	elif Input.is_action_just_pressed('click'):
 		#  remove two carets if just selected on a text without selecting on the caret
 		selected_controller = null
+		if line_edit:
+			line_edit.deselect()
+
+
+
 ## Responsible to move caret under text when typing and not selecting the caret
 func move_caret_under_text(focus_owner: Control, controller: ControllerCaret) -> void:
 	# Get the font used by the LineEdit/TextEdit
