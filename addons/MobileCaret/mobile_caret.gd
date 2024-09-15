@@ -99,21 +99,24 @@ func move_caret_selected() -> void:
 		_is_selecting = false
 	else:
 		# Update caret_one's x position to follow the mouse
+		var new_caret_pos: Vector2 = Vector2.ZERO
 		if line_edit is LineEdit:
 			selected_controller.global_position.x = get_global_mouse_position().x
 		elif line_edit is TextEdit:
 			selected_controller.global_position = get_global_mouse_position()
-		var new_caret_pos: int = calculate_node_caret_x_pos(selected_controller)
+			new_caret_pos.y = calculate_node_caret_y_pos(selected_controller)
+			line_edit.set_caret_line(new_caret_pos.y)
+		new_caret_pos.x = calculate_node_caret_x_pos(selected_controller)
 
 		# Update the LineEdit/TextEdit's caret position
-		line_edit.set_caret_column(new_caret_pos)
+		line_edit.set_caret_column(new_caret_pos.x)
 		
 		# Checking if there are two carets away from each other
 		if selected_controller != null:
 			if line_edit is LineEdit:
-				select_text_line_edit(new_caret_pos)
+				select_text_line_edit(new_caret_pos.x)
 			elif line_edit is TextEdit:
-				pass
+				select_text_text_edit(new_caret_pos)
 
 ## Setting the selected caret to be able to move it and grab focus of line edit
 func set_selected_caret(focus_owner: BaseButton) -> void:
@@ -134,10 +137,16 @@ func select_text_line_edit(selected_caret_pos: int) -> void:
 	var max_letter: int = max(other_caret_pos, selected_caret_pos)
 	line_edit.select(min_letter, max_letter)
 
-func select_text_text_edit(selected_caret_pos: int) -> void:
+func select_text_text_edit(selected_caret_pos : Vector2) -> void:
 		selected_controller.global_position = get_global_mouse_position()
-		var node_caret_old_pos: Vector2 = Vector2(line_edit.get_caret_column(), line_edit.get_caret_line())
-		selected_controller.controller_pos = Vector2(calculate_node_caret_x_pos(selected_controller), calculate_node_caret_y_pos(selected_controller))
+		var other_caret_pos: Vector2 = Vector2.ZERO
+		if selected_controller != controller_one:
+			other_caret_pos.x = calculate_node_caret_x_pos(controller_one)
+			other_caret_pos.y = calculate_node_caret_y_pos(controller_one)
+		else:
+			other_caret_pos.x = calculate_node_caret_x_pos(controller_two)
+			other_caret_pos.y = calculate_node_caret_y_pos(controller_two)
+		line_edit.select(other_caret_pos.y, other_caret_pos.x, selected_caret_pos.y, selected_caret_pos.x)
 
 #region private functions
 # Calculate the vertical offset to position caret_one relative to the baseline
