@@ -1,6 +1,6 @@
 [gd_scene load_steps=5 format=3 uid="uid://bh7oe51jp8ueg"]
 
-[ext_resource type="PackedScene" uid="uid://drn0vrtfhsgwp" path="res://addons/MobileCaret/mobile_caret.tscn" id="1_vncob"]
+[ext_resource type="PackedScene" uid="uid://drn0vrtfhsgwp" path="res://addons/CaretsController/carets_controller.tscn" id="1_t1di0"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_phk0k"]
 bg_color = Color(1, 1, 1, 1)
@@ -84,4 +84,4 @@ placeholder_text = "Write text here..."
 wrap_mode = 1
 caret_blink = true
 
-[node name="mobile_caret" parent="." instance=ExtResource("1_vncob")]
+[node name="mobile_caret" parent="." instance=ExtResource("1_t1di0")]

@@ -90,33 +90,51 @@ func move_controller_under_text_typing(focus_owner: Control, controller: Control
 		caret_pos.y + caret_offset.y + _calculate_y_pos(current_font_size)
 	)
 
-## Handles clicking on the caret and moving it
+
+## Handles clicking on the icon caret and moving it
 func move_caret_selected() -> void:
 	_enable_caret(false)
-	# Handle text selection logic 
+
 	if Input.is_action_just_released('click'):
-		# End selection and re-enable caret blinking
 		_is_selecting = false
 	else:
-		# Update caret_one's x position to follow the mouse
 		var new_caret_pos: Vector2 = Vector2.ZERO
+
 		if line_edit is LineEdit:
-			selected_controller.global_position.x = get_global_mouse_position().x
+			# Clamp horizontally for LineEdit
+			var min_x = line_edit.global_position.x + _get_text_offset().x
+			var max_x = min_x + line_edit.get_string_size(line_edit.text).x  # End of text
+			selected_controller.global_position.x = clamp(get_global_mouse_position().x, min_x, max_x)
 		elif line_edit is TextEdit:
-			selected_controller.global_position = get_global_mouse_position()
+			# Clamp for TextEdit (both x and y)
+
+			# 1. Calculate the bounding rectangle of the text in global coordinates.
+			var text_rect = Rect2(line_edit.global_position + _get_text_offset(), line_edit.get_string_size(line_edit.text))
+
+			var line_height = font.get_height(_get_font_size(line_edit))
+
+			# Adjust the bounding box to account for empty lines at the end of the TextEdit.
+			text_rect.size.y = line_height * line_edit.get_line_count()
+
+
+			# Clamp the mouse position to the text rectangle bounds.
+			var clamped_mouse_pos = clamp(get_global_mouse_position(), text_rect.position, text_rect.end)
+
+
+			selected_controller.global_position = clamped_mouse_pos
 			new_caret_pos.y = calculate_node_caret_y_pos(selected_controller)
 			line_edit.set_caret_line(new_caret_pos.y)
+
 		new_caret_pos.x = calculate_node_caret_x_pos(selected_controller)
 
-		# Update the LineEdit/TextEdit's caret position
 		line_edit.set_caret_column(new_caret_pos.x)
-		
-		# Checking if there are two carets away from each other
+
 		if selected_controller != null:
 			if line_edit is LineEdit:
 				select_text_line_edit(new_caret_pos.x)
 			elif line_edit is TextEdit:
 				select_text_text_edit(new_caret_pos)
+
 
 ## Setting the selected caret to be able to move it and grab focus of line edit
 func set_selected_caret(focus_owner: BaseButton) -> void:
@@ -176,12 +194,14 @@ func _get_font_size(line_edit: Control) -> int:
 
 #region Calculation Node Caret Pos
 func calculate_node_caret_x_pos(controller_caret: ControllerCaret) -> int:
-	# Calculate the offset to position caret_one relative to the LineEdit/TextEdit's origin
-	var caret_offset: float = line_edit.global_position.x + _get_text_offset().x
-	# Get the effective font size (accounting for theme overrides)
-	var current_font_size: int = _get_font_size(line_edit)
-	# Calculate the relative x distance between the mouse and the LineEdit/TextEdit's left edge
-	var rel_x = controller_caret.global_position.x - caret_offset - image_offset_caret.x - _calculate_x_pos(current_font_size)
+	#  Get the LineEdit/TextEdit's bounding rectangle in global coordinates
+	var control_global_rect: Rect2 = line_edit.get_global_rect()
+	# Calculate the offset to position caret relative to the LineEdit/TextEdit's origin
+	var caret_offset: float = control_global_rect.position.x + _get_text_offset().x
+	#Clamp global mouse x position to the control's bounds
+	var clamped_mouse_x = clamp(get_global_mouse_position().x, control_global_rect.position.x, control_global_rect.end.x)
+	# Calculate the relative x distance between the *clamped* mouse position and the LineEdit/TextEdit's left edge
+	var rel_x = clamped_mouse_x - caret_offset - image_offset_caret.x - _calculate_x_pos(_get_font_size(line_edit))
 	# Find the new caret position based on the relative x distance
 	var new_caret_pos: int = 0
 	for i in range(len(line_edit.text) + 1):
@@ -190,19 +210,27 @@ func calculate_node_caret_x_pos(controller_caret: ControllerCaret) -> int:
 		else:
 			break
 	return new_caret_pos
+
+
+
 	#region Calculation Node Caret Pos
 func calculate_node_caret_y_pos(controller_caret: ControllerCaret) -> int:
 	if line_edit is TextEdit:
-		var caret_offset: float = line_edit.global_position.y + _get_text_offset().y
+		var control_global_rect: Rect2 = line_edit.get_global_rect()
+		var caret_offset: float = control_global_rect.position.y + _get_text_offset().y
 		var current_font_size: int = _get_font_size(line_edit)
 		var line_height: float = font.get_string_size("A", _get_text_alignment(), -1, current_font_size).y
-		var rel_y = controller_caret.global_position.y - caret_offset - _calculate_y_pos(current_font_size)
 
-		# Find the line number based on the relative y position
+		#Clamp global mouse y position to the control's bounds
+		var clamped_mouse_y = clamp(get_global_mouse_position().y, control_global_rect.position.y, control_global_rect.end.y)
+
+		var rel_y = clamped_mouse_y - caret_offset - _calculate_y_pos(current_font_size)
+
+
 		var new_caret_line: int = int(rel_y / line_height)
 
-		# Clamp the line number to be within the valid range
 		new_caret_line = clamp(new_caret_line, 0, line_edit.get_line_count() - 1)
+
 
 		return new_caret_line
 	return 0
