@@ -84,4 +84,4 @@ placeholder_text = "Write text here..."
 wrap_mode = 1
 caret_blink = true
 
-[node name="mobile_caret" parent="." instance=ExtResource("1_t1di0")]
+[node name="carets_controller" parent="." instance=ExtResource("1_t1di0")]
