@@ -103,7 +103,8 @@ func get_native_caret_local_pos() -> Vector2:
 			var column = current_ui_control.get_caret_column()
 			var text_before = current_ui_control.text.substr(0, column)
 			var font_size = get_font_size()
-			var pos = get_font().get_string_size(text_before, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+			var pos : Vector2 = get_font().get_string_size(text_before, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+			pos.x += current_ui_control.get_scroll_offset()
 			pos.y = get_font().get_height(font_size) * 0.5
 			return pos
 		ui_control_type.X | ui_control_type.Y:

@@ -1,14 +1,9 @@
 extends base_carets_controller
 
 
-
-
 # Selection anchor for TextEdit
 var _selection_anchor_line: int = 0
 var _selection_anchor_col: int = 0
-
-
-
 
 
 
@@ -27,25 +22,31 @@ func _process(_delta: float) -> void:
 			current_ui_control = current_focused_ui
 			on_ui_selected()
 		on_ui_update()
-	elif current_focused_ui is ControllerCaret:
-		on_caret_selected(current_focused_ui)
-		on_caret_dragging()
-		
+	elif current_selected_caret != null and  Input.is_action_just_released("click") and _is_caret_drag:
+		on_carets_stop_dragging()
+	elif current_focused_ui is BaseButton:
+		if Input.is_action_just_pressed("click"):
+			if current_focused_ui.get_parent() == null && current_focused_ui.get_parent() is not ControllerCaret: return
+			on_caret_selected(current_focused_ui.get_parent())
+		if _is_caret_drag:
+			on_caret_dragging()
 	# If we click anywhere else, deselect text and hide carets
-	elif Input.is_action_just_pressed("click") and not (current_focused_ui is ControllerCaret):
-		on_carets_deselected()
+	elif Input.is_action_just_pressed("click") and not (current_focused_ui is BaseButton):
+		on_carets_stop_dragging()
 	
 	else:
 		on_ui_deselected()
-		on_carets_deselected()
 
 
 func on_ui_selected() -> void:
 	pass
 
-
 func on_ui_deselected() -> void:
 	reset_selection_state()
+	_is_caret_drag = false
+	current_selected_caret = null
+	caret_one.hide_caret()
+	caret_two.hide_caret()
 
 func on_ui_update() -> void:
 	_update_carets_to_typing_pos()
@@ -60,11 +61,10 @@ func on_caret_selected(caret_focused : ControllerCaret) -> void:
 func on_caret_dragging() -> void:
 	_handle_selection_drag()
 
-func on_carets_deselected() -> void:
+func on_carets_stop_dragging() -> void:
 	_is_caret_drag = false
+	on_ui_update()
 	current_selected_caret = null
-	caret_one.hide_caret()
-	caret_two.hide_caret()
 
 
 func _update_carets_to_typing_pos() -> void:
@@ -93,10 +93,10 @@ func _start_caret_selection(caret_focused: ControllerCaret) -> void:
 
 	caret_one.show_caret()
 	caret_two.show_caret()
-	
+	var textlabel : Label = null
 	match current_ui_type:
 		ui_control_type.X:
-			_selection_anchor_line = current_ui_control.get_caret_line()
+			_selection_anchor_line = current_ui_control.get_caret_column()
 			_selection_anchor_col = 0
 		ui_control_type.X | ui_control_type.Y:
 			_selection_anchor_line = current_ui_control.get_caret_line()
@@ -104,11 +104,9 @@ func _start_caret_selection(caret_focused: ControllerCaret) -> void:
 	
 
 func _handle_selection_drag() -> void:
-	if Input.is_action_just_released("click"):
-		_is_caret_drag = false
 	# Update the position of the controller being dragged to the global mouse position
 	# We use get_global_mouse_position() directly for accuracy during the drag
-	current_selected_caret.global_position = get_global_mouse_position()
+	
 	match current_ui_type:
 		ui_control_type.X:
 			_select_text_line_edit()
@@ -118,6 +116,7 @@ func _handle_selection_drag() -> void:
 
 
 func _select_text_line_edit() -> void:
+	current_selected_caret.global_position.x = get_global_mouse_position().x
 	var pos1: int = _get_char_index_from_pos(caret_one)
 	var pos2: int = _get_char_index_from_pos(caret_two)
 	
@@ -128,6 +127,7 @@ func _select_text_line_edit() -> void:
 
 
 func _select_text_text_edit() -> void:
+	current_selected_caret.global_position = get_global_mouse_position()
 	# Godot 4 Correction: Use get_local_mouse_position() for direct conversion
 	var local_mouse_pos: Vector2 = current_ui_control.get_local_mouse_position()
 	
