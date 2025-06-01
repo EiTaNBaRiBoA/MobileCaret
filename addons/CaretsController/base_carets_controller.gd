@@ -1,7 +1,6 @@
 extends Control
 class_name base_carets_controller
 
-const OFFSET_BY: String = "_"
 # Custom texture for the carets
 @export var texture_caret: Texture2D
 
@@ -29,21 +28,23 @@ func update_current_ui_control(new_ui_control : Control) -> bool:
 	var is_support_text_control: bool = false
 	if not is_instance_valid(new_ui_control) : 
 		return is_support_text_control
-	current_ui_control = new_ui_control
-	if current_ui_control is LineEdit:
+	if new_ui_control is LineEdit:
 		current_ui_type = ui_control_type.X
 		is_support_text_control = true
-	elif current_ui_control is TextEdit:
+	elif new_ui_control is TextEdit:
 		current_ui_type = (ui_control_type.X | ui_control_type.Y)
 		is_support_text_control = true
-	_reset_selection_state()
 	return is_support_text_control
 
-func _reset_selection_state() -> void:
-	if is_instance_valid(current_ui_control) and _is_caret_drag:
+func reset_selection_state() -> void:
+	if is_instance_valid(current_ui_control):
 		current_ui_control.deselect()
-
-	current_ui_control = null
+		current_ui_control= null
+	if is_instance_valid(current_ui_control) and not _is_caret_drag:
+		current_ui_control.deselect()
+	elif not is_instance_valid(current_ui_control) && !_is_caret_drag:
+		current_ui_control= null
+		current_ui_type = ui_control_type.NONE
 
 
 
@@ -61,9 +62,9 @@ func get_font() -> Font:
 
 	
 
-func get_string_size_x()-> float:
+func get_string_size_x(offset_str : String)-> float:
 	var offset : float = current_ui_control.size.x - get_font().get_string_size(
-		OFFSET_BY,
+		offset_str,
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
 		get_font_size(),
@@ -73,9 +74,9 @@ func get_string_size_x()-> float:
 	).x
 	return offset
 
-func get_string_size_y() -> float:
+func get_string_size_y(offset_str : String) -> float:
 	var offset : float = current_ui_control.size.x - get_font().get_string_size(
-		OFFSET_BY,
+		offset_str,
 		HORIZONTAL_ALIGNMENT_LEFT,
 		-1,
 		get_font_size(),
@@ -115,3 +116,24 @@ func get_native_caret_local_pos() -> Vector2:
 
 func is_ui_text_empty() -> bool:
 	return current_ui_control.text.is_empty()
+	
+func is_ui_caret_not_visible() -> bool:
+	match current_ui_type:
+		ui_control_type.X:
+			var text_before_caret : String = current_ui_control.text.substr(0, current_ui_control.get_caret_column())
+			var scroll_offset = current_ui_control.get_scroll_offset()
+			var control_width = current_ui_control.size.x
+			
+			return get_string_size_x(text_before_caret) < scroll_offset or get_string_size_x(text_before_caret) > scroll_offset + control_width
+		ui_control_type.X | ui_control_type.Y:
+			var caret_line : int = current_ui_control.get_caret_line()
+			var first_visible_line = current_ui_control.get_first_visible_line()
+			var last_visible_line = first_visible_line + get_visible_line_count()
+			return caret_line < first_visible_line or caret_line > last_visible_line
+	return false
+
+
+func get_visible_line_count() -> int:
+	if get_font().get_height() > 0:
+		return int(current_ui_control.size.y / get_font().get_height())
+	return 0

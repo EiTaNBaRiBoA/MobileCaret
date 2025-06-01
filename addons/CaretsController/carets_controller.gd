@@ -24,9 +24,9 @@ func _process(_delta: float) -> void:
 	if update_current_ui_control(current_focused_ui):
 		if current_focused_ui != current_ui_control:
 			on_ui_deselected()
-		current_ui_control = current_focused_ui
-		on_ui_selected()
-		
+			current_ui_control = current_focused_ui
+			on_ui_selected()
+		on_ui_update()
 	elif current_focused_ui is ControllerCaret:
 		on_caret_selected(current_focused_ui)
 		on_caret_dragging()
@@ -41,16 +41,14 @@ func _process(_delta: float) -> void:
 
 
 func on_ui_selected() -> void:
-	_update_carets_to_typing_pos()
+	pass
 
 
 func on_ui_deselected() -> void:
-	if is_instance_valid(current_ui_control):
-		current_ui_control.deselect()
-		current_ui_control= null
-	current_ui_type = ui_control_type.NONE
+	reset_selection_state()
 
-
+func on_ui_update() -> void:
+	_update_carets_to_typing_pos()
 
 
 
@@ -70,7 +68,7 @@ func on_carets_deselected() -> void:
 
 
 func _update_carets_to_typing_pos() -> void:
-	if not is_instance_valid(current_ui_control) or is_ui_text_empty():
+	if not is_instance_valid(current_ui_control) or is_ui_text_empty() or is_ui_caret_not_visible():
 		caret_one.hide_caret()
 		caret_two.hide_caret()
 		return
