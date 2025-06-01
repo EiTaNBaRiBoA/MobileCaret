@@ -72,6 +72,9 @@ func _update_carets_to_typing_pos() -> void:
 		caret_one.hide_caret()
 		caret_two.hide_caret()
 		return
+	elif current_selected_caret != null:
+		caret_one.show_caret()
+		caret_two.show_caret()
 	else:
 		# Only show one caret when not selecting
 		caret_one.show_caret()
@@ -81,10 +84,12 @@ func _update_carets_to_typing_pos() -> void:
 	var caret_pos_local: Vector2 = get_native_caret_local_pos()
 	# Godot 4 Correction: Convert local to global position
 	var caret_pos_global: Vector2 = current_ui_control.global_position + caret_pos_local
-	
-	caret_one.global_position = caret_pos_global + _calculate_caret_offset( get_font_size())
-	caret_two.global_position = caret_one.global_position
-
+	if current_selected_caret!= null:
+		var not_current_caret : ControllerCaret = caret_two if (current_selected_caret == caret_one) else caret_one
+		current_selected_caret.global_position = caret_pos_global + _calculate_caret_offset(get_font_size())
+	else:
+		caret_one.global_position = caret_pos_global + _calculate_caret_offset(get_font_size())
+		caret_two.global_position = caret_one.global_position
 
 func _start_caret_selection(caret_focused: ControllerCaret) -> void:
 	_is_caret_drag = true
