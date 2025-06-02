@@ -196,27 +196,40 @@ func _select_text_text_edit() -> void:
 func _get_char_index_from_pos(controller: ControllerCaret) -> int:
 	if not current_ui_control is LineEdit: return 0
 	
-	# This is a robust way to convert global position to local, accounting for UI scaling/rotation.
-	var local_pos = current_ui_control.get_global_transform().affine_inverse().basis_xform(controller.global_position)
-	var local_x = local_pos.x
+	# 1. Get the LineEdit's global transform and create its inverse.
+	var inverse_transform: Transform2D = current_ui_control.get_global_transform().affine_inverse()
 	
-	var text = current_ui_control.text
-	var font_size = get_font_size()
+	# 2. Correctly convert the caret's global position to the LineEdit's local coordinates.
+	# This is the proper Godot 4 replacement for the old to_local() method.
+	var local_pos: Vector2 = inverse_transform * controller.global_position
+
+	# 3. Get the necessary values to translate from the control's local space to the full string's space.
+	var scroll_offset: float = current_ui_control.get_scroll_offset()
+	var stylebox: StyleBox = current_ui_control.get_theme_stylebox("focus" if current_ui_control.has_focus() else "normal")
+	var margin_left: float = stylebox.get_content_margin(SIDE_LEFT)
+
+	# 4. Calculate the target X position in the coordinate system of the FULL, UNSCROLLED text string.
+	# This formula correctly accounts for the control's internal padding and horizontal scrolling.
+	var target_x_in_string: float = (local_pos.x - margin_left) + scroll_offset
+
+	var text: String = current_ui_control.text
+	var font_size: int = get_font_size()
 	
-	# Iterate through the string to find the character index closest to the caret's x-position.
-	var closest_index = 0
-	var min_dist = INF
+	# 5. Iterate through the string to find the character index closest to our calculated target position.
+	var closest_index: int = 0
+	var min_dist: float = INF
+	
 	for i in range(text.length() + 1):
-		var char_pos = get_font().get_string_size(text.substr(0, i), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-		var dist = abs(local_x - char_pos)
+		var char_pos: float = get_font().get_string_size(text.substr(0, i), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+		var dist: float = abs(target_x_in_string - char_pos)
+		
 		if dist < min_dist:
 			min_dist = dist
 			closest_index = i
 		else:
-			# Optimization: Stop once distance starts increasing, as characters are sequential.
-			break
+			break # Optimization
+			
 	return closest_index
-
 #endregion
 
 
