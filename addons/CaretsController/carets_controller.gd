@@ -164,37 +164,56 @@ func _select_text_line_edit() -> void:
 
 # Manages text selection logic for a TextEdit control using Godot 4 API.
 func _select_text_text_edit() -> void:
-	current_selected_caret.global_position = get_global_mouse_position()
+	var line_count: int = current_ui_control.get_line_count()
+	if line_count == 0:
+		return
+
+	var mouse_pos: Vector2 = get_global_mouse_position()
 	
-	# Convert global mouse position to local coordinates
+	# --- 1. Manual Scrolling Logic ---
+	# We manually scroll the TextEdit if the user drags outside its global bounds.
+	var control_rect: Rect2 = current_ui_control.get_global_rect()
+	var scroll_speed: float = 300.0 # Adjust this value for faster/slower scrolling.
+	var scroll_margin: float = 20.0 # The distance from the edge to start scrolling.
+
+	if mouse_pos.y < control_rect.position.y + scroll_margin:
+		# Scroll up
+		current_ui_control.scroll_vertical -= scroll_speed * get_process_delta_time()
+	elif mouse_pos.y > control_rect.end.y - scroll_margin:
+		# Scroll down
+		current_ui_control.scroll_vertical += scroll_speed * get_process_delta_time()
+
+	# --- 2. Visual Handle Clamping ---
+	# We clamp the *visual* handle's position to the control's bounds for a better user experience.
+	var clamped_pos: Vector2 = mouse_pos
+	clamped_pos.y = clamp(clamped_pos.y, control_rect.position.y, control_rect.end.y)
+	current_selected_caret.global_position = clamped_pos
+	
+	# --- 3. Selection Logic (uses the clamped handle's position) ---
+	# This part of the logic remains the same, but now operates on a correctly
+	# positioned handle and a potentially scrolling view.
 	var inverse_transform: Transform2D = current_ui_control.get_global_transform().affine_inverse()
-	var local_mouse_pos: Vector2 = inverse_transform * get_global_mouse_position()
+	var local_pos: Vector2 = inverse_transform * current_selected_caret.global_position
 	
-	# Find the line and column at the mouse position using the correct Godot 4 method.
-	var line_col_at_pos: Vector2i = current_ui_control.get_line_column_at_pos(local_mouse_pos, true)
+	# Find the line and column at the mouse position using the correct.
+	var line_col_at_pos: Vector2i = current_ui_control.get_line_column_at_pos(local_pos, true)
 	var new_line: int = line_col_at_pos.y
 	var new_col: int = line_col_at_pos.x
 	
 	# Ensure the new position is within the bounds of the text.
-	var line_count: int = current_ui_control.get_line_count()
-	if line_count > 0:
-		new_line = clamp(new_line, 0, line_count - 1)
-		new_col = clamp(new_col, 0, current_ui_control.get_line(new_line).length())
-	else:
-		new_line = 0
-		new_col = 0
+	new_line = clamp(new_line, 0, line_count - 1)
+	new_col = clamp(new_col, 0, current_ui_control.get_line(new_line).length())
 
-	# Move the native caret to the new position.
-	current_ui_control.set_caret_line(new_line, true)
+	# Setting the caret line with `scroll_to_caret = false` because we handle scrolling manually.
+	current_ui_control.set_caret_line(new_line, false)
 	current_ui_control.set_caret_column(new_col)
 	
-	# Select text from the original anchor point to the new cursor position.
 	current_ui_control.select(_selection_anchor_line, _selection_anchor_col, new_line, new_col)
-	
+		
 	# Update the visual position of the anchor handle (the one not being dragged).
 	var anchor_controller: ControllerCaret = caret_one if current_selected_caret == caret_two else caret_two
 	
-	# Get the local position of the anchor handle
+		# Get the local position of the anchor handle
 	# get_rect_at_line_column() returns the Rect2 for the character. Its '.position' gives the Vector2.
 	var anchor_rect: Rect2 = current_ui_control.get_rect_at_line_column(_selection_anchor_line, _selection_anchor_col)
 	var anchor_pos_local: Vector2 = anchor_rect.position
@@ -203,7 +222,7 @@ func _select_text_text_edit() -> void:
 	var anchor_pos_global: Vector2 = current_ui_control.get_global_transform() * anchor_pos_local
 	
 	anchor_controller.global_position = anchor_pos_global + _calculate_caret_offset(get_font_size())
-
+	
 #region Helper Functions
 
 # Determines the character index in a LineEdit from a caret's global position.
