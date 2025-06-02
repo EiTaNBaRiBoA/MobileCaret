@@ -96,8 +96,7 @@ func _update_carets_to_typing_pos() -> void:
 		return
 	# If a selection is in progress, show both carets.
 	elif current_selected_caret != null:
-		caret_one.show_caret()
-		caret_two.show_caret()
+		update_caret_visibility()
 	# If just typing (no selection), show only one caret.
 	else:
 		# Only show one caret when not selecting
@@ -213,7 +212,7 @@ func _select_text_text_edit() -> void:
 	# Update the visual position of the anchor handle (the one not being dragged).
 	var anchor_controller: ControllerCaret = caret_one if current_selected_caret == caret_two else caret_two
 	
-		# Get the local position of the anchor handle
+	# Get the local position of the anchor handle
 	# get_rect_at_line_column() returns the Rect2 for the character. Its '.position' gives the Vector2.
 	var anchor_rect: Rect2 = current_ui_control.get_rect_at_line_column(_selection_anchor_line, _selection_anchor_col)
 	var anchor_pos_local: Vector2 = anchor_rect.position
@@ -222,8 +221,24 @@ func _select_text_text_edit() -> void:
 	var anchor_pos_global: Vector2 = current_ui_control.get_global_transform() * anchor_pos_local
 	
 	anchor_controller.global_position = anchor_pos_global + _calculate_caret_offset(get_font_size())
-	
+	update_caret_visibility()
+
 #region Helper Functions
+
+func update_caret_visibility() -> void:
+	#  Hide Carets if Anchor is Not Visible
+	var first_visible_line: int = current_ui_control.get_first_visible_line()
+	# Calculate the last visible line using the correct Godot.
+	var last_visible_line: int = first_visible_line + current_ui_control.get_visible_line_count() - 1
+
+	if _selection_anchor_line < first_visible_line or _selection_anchor_line > last_visible_line:
+		# Anchor is out of view, hide the carets.
+		caret_two.hide_caret()
+		current_selected_caret.show_caret()
+	else:
+		# Anchor is in view, make sure the carets are visible.
+		caret_one.show_caret()
+		caret_two.show_caret()
 
 # Determines the character index in a LineEdit from a caret's global position.
 func _get_char_index_from_pos(controller: ControllerCaret) -> int:
