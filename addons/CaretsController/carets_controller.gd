@@ -34,7 +34,7 @@ func _process(_delta: float) -> void:
 		# Update caret positions every frame for the active control.
 		on_ui_update()
 	# If a caret was being dragged and the user released the touch/click...
-	elif current_selected_caret != null and  Input.is_action_just_released("click") and _is_caret_drag:
+	elif current_selected_caret != null and Input.is_action_just_released("click") and _is_caret_drag:
 		on_carets_stop_dragging()
 	# If the user is interacting with a caret handle (which is a BaseButton)...
 	elif current_focused_ui is BaseButton:
@@ -73,7 +73,7 @@ func on_ui_update() -> void:
 
 
 # Called when a user presses a caret handle.
-func on_caret_selected(caret_focused : ControllerCaret) -> void:
+func on_caret_selected(caret_focused: ControllerCaret) -> void:
 	if current_selected_caret != caret_focused:
 		_start_caret_selection(caret_focused)
 
@@ -111,8 +111,8 @@ func _update_carets_to_typing_pos() -> void:
 	
 	# If a caret is being dragged, update its position. The other caret's position
 	# is handled by the selection logic.
-	if current_selected_caret!= null:
-		var not_current_caret : ControllerCaret = caret_two if (current_selected_caret == caret_one) else caret_one
+	if current_selected_caret != null:
+		var not_current_caret: ControllerCaret = caret_two if (current_selected_caret == caret_one) else caret_one
 		current_selected_caret.global_position = caret_pos_global + _calculate_caret_offset(get_font_size())
 	# If not selecting, position both carets at the typing cursor (only one will be visible).
 	else:
@@ -127,7 +127,7 @@ func _start_caret_selection(caret_focused: ControllerCaret) -> void:
 
 	caret_one.show_caret()
 	caret_two.show_caret()
-	var textlabel : Label = null
+	var textlabel: Label = null
 	# Store the current cursor position as the fixed anchor for the selection.
 	match current_ui_type:
 		ui_control_type.X:
@@ -141,7 +141,6 @@ func _start_caret_selection(caret_focused: ControllerCaret) -> void:
 func _handle_selection_drag() -> void:
 	# Update the position of the controller being dragged to the global mouse position
 	# We use get_global_mouse_position() directly for accuracy during the drag
-	
 	match current_ui_type:
 		ui_control_type.X:
 			_select_text_line_edit()

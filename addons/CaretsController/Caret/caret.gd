@@ -16,7 +16,3 @@ func hide_caret() -> void:
 
 func show_caret() -> void:
 	caret.show()
-
-
-func get_pos() -> void:
-	pass
