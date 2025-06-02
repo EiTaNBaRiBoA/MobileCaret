@@ -162,33 +162,47 @@ func _select_text_line_edit() -> void:
 	var active_pos = _get_char_index_from_pos(current_selected_caret)
 	current_ui_control.set_caret_column(active_pos)
 
-# Manages text selection logic for a TextEdit control.
+# Manages text selection logic for a TextEdit control using Godot 4 API.
 func _select_text_text_edit() -> void:
 	current_selected_caret.global_position = get_global_mouse_position()
-	# Get the mouse position in the TextEdit's local coordinates.
-	var local_mouse_pos: Vector2 = current_ui_control.get_local_mouse_position()
 	
-	# Find the line and column at the mouse position.
-	var new_line: int = current_ui_control.get_line_at_pos(local_mouse_pos)
-	var new_col: int = current_ui_control.get_column_at_pos(local_mouse_pos, true)
+	# Convert global mouse position to local coordinates
+	var inverse_transform: Transform2D = current_ui_control.get_global_transform().affine_inverse()
+	var local_mouse_pos: Vector2 = inverse_transform * get_global_mouse_position()
+	
+	# Find the line and column at the mouse position using the correct Godot 4 method.
+	var line_col_at_pos: Vector2i = current_ui_control.get_line_column_at_pos(local_mouse_pos, true)
+	var new_line: int = line_col_at_pos.y
+	var new_col: int = line_col_at_pos.x
 	
 	# Ensure the new position is within the bounds of the text.
-	new_line = clamp(new_line, 0, current_ui_control.get_line_count() - 1)
-	new_col = clamp(new_col, 0, current_ui_control.get_line_text(new_line).length())
+	var line_count: int = current_ui_control.get_line_count()
+	if line_count > 0:
+		new_line = clamp(new_line, 0, line_count - 1)
+		new_col = clamp(new_col, 0, current_ui_control.get_line(new_line).length())
+	else:
+		new_line = 0
+		new_col = 0
 
 	# Move the native caret to the new position.
-	current_ui_control.set_caret_line(new_line)
+	current_ui_control.set_caret_line(new_line, true)
 	current_ui_control.set_caret_column(new_col)
 	
 	# Select text from the original anchor point to the new cursor position.
 	current_ui_control.select(_selection_anchor_line, _selection_anchor_col, new_line, new_col)
 	
 	# Update the visual position of the anchor handle (the one not being dragged).
-	var anchor_controller = caret_one if current_selected_caret == caret_two else caret_two
-	var anchor_pos_local = current_ui_control.get_pos_at_line_column(_selection_anchor_line, _selection_anchor_col)
-	# Convert local anchor position to global coordinates.
-	anchor_controller.global_position = current_ui_control.global_position + anchor_pos_local + _calculate_caret_offset(get_font_size())
+	var anchor_controller: ControllerCaret = caret_one if current_selected_caret == caret_two else caret_two
+	
+	# Get the local position of the anchor handle
+	# get_rect_at_line_column() returns the Rect2 for the character. Its '.position' gives the Vector2.
+	var anchor_rect: Rect2 = current_ui_control.get_rect_at_line_column(_selection_anchor_line, _selection_anchor_col)
+	var anchor_pos_local: Vector2 = anchor_rect.position
 
+	# Convert local anchor position to global coordinates
+	var anchor_pos_global: Vector2 = current_ui_control.get_global_transform() * anchor_pos_local
+	
+	anchor_controller.global_position = anchor_pos_global + _calculate_caret_offset(get_font_size())
 
 #region Helper Functions
 
