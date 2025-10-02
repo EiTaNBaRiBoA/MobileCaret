@@ -1,6 +1,6 @@
 [gd_scene load_steps=5 format=3 uid="uid://bh7oe51jp8ueg"]
 
-[ext_resource type="PackedScene" uid="uid://drn0vrtfhsgwp" path="res://addons/CaretsController/carets_controller.tscn" id="1_t1di0"]
+[ext_resource type="PackedScene" uid="uid://drn0vrtfhsgwp" path="res://MobileCaret/addons/MobileCaret/CaretsController/carets_controller.tscn" id="1_t1di0"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_phk0k"]
 bg_color = Color(1, 1, 1, 1)
@@ -51,15 +51,15 @@ text = "LineEdit test"
 
 [node name="LineEdit" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_colors/caret_color = Color(0, 0, 0, 1)
-theme_override_colors/font_placeholder_color = Color(0.67069, 0.67069, 0.67069, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
-theme_override_colors/font_selected_color = Color(1, 1, 1, 1)
 theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_colors/font_selected_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_colors/font_placeholder_color = Color(0.67069, 0.67069, 0.67069, 1)
+theme_override_colors/caret_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 126
-theme_override_styles/focus = SubResource("StyleBoxFlat_iwc8h")
-theme_override_styles/read_only = SubResource("StyleBoxFlat_iwc8h")
 theme_override_styles/normal = SubResource("StyleBoxFlat_iwc8h")
+theme_override_styles/read_only = SubResource("StyleBoxFlat_iwc8h")
+theme_override_styles/focus = SubResource("StyleBoxFlat_iwc8h")
 placeholder_text = "Write text here...."
 caret_blink = true
 
@@ -72,10 +72,10 @@ text = "LineEdit test"
 [node name="TextEdit" type="TextEdit" parent="Panel/MarginContainer/VBoxContainer"]
 custom_minimum_size = Vector2(0, 80)
 layout_mode = 2
-theme_override_colors/font_placeholder_color = Color(0.505344, 0.505344, 0.505344, 1)
-theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_colors/font_selected_color = Color(1, 1, 1, 1)
 theme_override_colors/caret_color = Color(0, 0, 0, 1)
+theme_override_colors/font_selected_color = Color(1, 1, 1, 1)
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_colors/font_placeholder_color = Color(0.505344, 0.505344, 0.505344, 1)
 theme_override_font_sizes/font_size = 16
 theme_override_styles/normal = SubResource("StyleBoxFlat_n8j2d")
 theme_override_styles/focus = SubResource("StyleBoxFlat_n8j2d")
@@ -85,3 +85,4 @@ wrap_mode = 1
 caret_blink = true
 
 [node name="carets_controller" parent="." instance=ExtResource("1_t1di0")]
+layout_mode = 0

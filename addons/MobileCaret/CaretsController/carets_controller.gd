@@ -21,7 +21,7 @@ func _ready() -> void:
 # Called every frame. The main loop for managing caret state.
 func _process(_delta: float) -> void:
 	# Get the UI element that currently has focus.
-	var current_focused_ui = get_viewport().gui_get_focus_owner()
+	var current_focused_ui : Control = get_viewport().gui_get_focus_owner()
 
 	# If the focused element is a supported text control...
 	if update_current_ui_control(current_focused_ui):
@@ -111,7 +111,7 @@ func _update_carets_to_typing_pos() -> void:
 	# If a caret is being dragged, update its position. The other caret's position
 	# is handled by the selection logic.
 	if current_selected_caret != null:
-		var not_current_caret: ControllerCaret = caret_two if (current_selected_caret == caret_one) else caret_one
+		var _not_current_caret: ControllerCaret = caret_two if (current_selected_caret == caret_one) else caret_one
 		current_selected_caret.global_position = caret_pos_global + _calculate_caret_offset(get_font_size())
 	# If not selecting, position both carets at the typing cursor (only one will be visible).
 	else:
@@ -126,13 +126,12 @@ func _start_caret_selection(caret_focused: ControllerCaret) -> void:
 
 	caret_one.show_caret()
 	caret_two.show_caret()
-	var textlabel: Label = null
 	# Store the current cursor position as the fixed anchor for the selection.
 	match current_ui_type:
-		ui_control_type.X:
+		UIControlType.X:
 			_selection_anchor_line = current_ui_control.get_caret_column()
 			_selection_anchor_col = 0
-		ui_control_type.X | ui_control_type.Y:
+		UIControlType.X | UIControlType.Y:
 			_selection_anchor_line = current_ui_control.get_caret_line()
 			_selection_anchor_col = current_ui_control.get_caret_column()
 	
@@ -141,9 +140,9 @@ func _handle_selection_drag() -> void:
 	# Update the position of the controller being dragged to the global mouse position
 	# We use get_global_mouse_position() directly for accuracy during the drag
 	match current_ui_type:
-		ui_control_type.X:
+		UIControlType.X:
 			_select_text_line_edit()
-		ui_control_type.X | ui_control_type.Y:
+		UIControlType.X | UIControlType.Y:
 			_select_text_text_edit()
 
 
@@ -158,7 +157,7 @@ func _select_text_line_edit() -> void:
 	current_ui_control.select(min(pos1, pos2), max(pos1, pos2))
 	
 	# Update the native caret position to match the dragged handle.
-	var active_pos = _get_char_index_from_pos(current_selected_caret)
+	var active_pos : int = _get_char_index_from_pos(current_selected_caret)
 	current_ui_control.set_caret_column(active_pos)
 
 # Manages text selection logic for a TextEdit control using Godot 4 API.
@@ -267,7 +266,7 @@ func _get_char_index_from_pos(controller: ControllerCaret) -> int:
 	var closest_index: int = 0
 	var min_dist: float = INF
 	
-	for i in range(text.length() + 1):
+	for i : int in range(text.length() + 1):
 		var char_pos: float = get_font().get_string_size(text.substr(0, i), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 		var dist: float = abs(target_x_in_string - char_pos)
 		

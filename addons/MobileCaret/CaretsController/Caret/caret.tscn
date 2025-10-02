@@ -1,0 +1,20 @@
+[gd_scene load_steps=2 format=3 uid="uid://c3kubqd85d2bk"]
+
+[ext_resource type="Script" uid="uid://bjkm4k4m00d7u" path="res://MobileCaret/addons/MobileCaret/CaretsController/Caret/caret.gd" id="1_kdovb"]
+
+[node name="caret" type="Control" node_paths=PackedStringArray("caret")]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_kdovb")
+caret = NodePath("caret_texture")
+
+[node name="caret_texture" type="TextureButton" parent="."]
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -32.0
+offset_right = 96.0
+offset_bottom = 128.0
+grow_horizontal = 2
+scale = Vector2(0.5, 0.5)

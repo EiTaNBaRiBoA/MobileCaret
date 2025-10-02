@@ -21,12 +21,13 @@ var current_font: Font = null
 # A reference to the currently focused UI text control (e.g., LineEdit, TextEdit).
 var current_ui_control: Control = null
 # The type of the current UI control, used for type-specific logic.
-var current_ui_type: ui_control_type = ui_control_type.NONE
+var current_ui_type: UIControlType = UIControlType.NONE
 # Enum for identifying the capabilities of the text control (1D vs. 2D).
-enum ui_control_type {
+enum UIControlType {
 	NONE = 1, # Not a supported control.
 	X = 2, # Supports horizontal movement (e.g., LineEdit).
-	Y = 4 # Supports vertical movement (e.g., TextEdit).
+	Y = 4, # Supports vertical movement (e.g., TextEdit).
+	XY = 6 # Both X and Y
 }
 
 # A visual offset for positioning the caret texture, set from the Inspector.
@@ -41,11 +42,11 @@ func update_current_ui_control(new_ui_control: Control) -> bool:
 	if not is_instance_valid(new_ui_control):
 		return is_support_text_control
 	if new_ui_control is LineEdit:
-		current_ui_type = ui_control_type.X
+		current_ui_type = UIControlType.X
 		is_support_text_control = true
 	elif new_ui_control is TextEdit:
 		# TextEdit supports both horizontal and vertical movement.
-		current_ui_type = (ui_control_type.X | ui_control_type.Y)
+		current_ui_type = UIControlType.X | UIControlType.Y as UIControlType
 		is_support_text_control = true
 	return is_support_text_control
 
@@ -58,7 +59,7 @@ func reset_selection_state() -> void:
 		current_ui_control.deselect()
 	elif not is_instance_valid(current_ui_control) && !_is_caret_drag:
 		current_ui_control = null
-		current_ui_type = ui_control_type.NONE
+		current_ui_type = UIControlType.NONE
 
 
 # Gets the font size from the active control, respecting theme overrides.
@@ -102,19 +103,19 @@ func get_string_size_y(offset_str: String) -> float:
 	return offset
 
 # Calculates the visual offset needed to correctly position the caret handle texture.
-func _calculate_caret_offset(font_size: float) -> Vector2:
+func _calculate_caret_offset(font_size: int) -> Vector2:
 	var caret_width: int = -1
 	if current_ui_control.has_theme_constant("caret_width"):
 		caret_width = current_ui_control.get_theme_constant("caret_width") # A small adjustment to better center the caret_one
-	var x_offset = caret_texture_offset.x + caret_width * 0.5
-	var line_height = get_font().get_height(font_size)
-	var y_offset = caret_texture_offset.y + line_height
+	var x_offset : float = caret_texture_offset.x + caret_width * 0.5
+	var line_height : float = get_font().get_height(font_size)
+	var y_offset : float = caret_texture_offset.y + line_height
 	return Vector2(x_offset, y_offset)
 
 # Gets the local position of the native caret within the text control.
 func get_native_caret_local_pos() -> Vector2:
 	match current_ui_type:
-		ui_control_type.X: # Logic for LineEdit
+		UIControlType.X: # Logic for LineEdit
 			var column: int = current_ui_control.get_caret_column()
 			var text_before: String = current_ui_control.text.substr(0, column)
 			var font_size: int = get_font_size()
@@ -132,7 +133,7 @@ func get_native_caret_local_pos() -> Vector2:
 			
 			return pos
 			
-		ui_control_type.X | ui_control_type.Y: # Logic for TextEdit
+		UIControlType.X | UIControlType.Y: # Logic for TextEdit
 			var line: int = current_ui_control.get_caret_line()
 			var column: int = current_ui_control.get_caret_column()
 			return current_ui_control.get_pos_at_line_column(line, column)
@@ -147,7 +148,7 @@ func is_ui_text_empty() -> bool:
 # Checks if the native caret is currently outside the visible area of the control.
 func is_ui_caret_not_visible() -> bool:
 	match current_ui_type:
-		ui_control_type.X: # Logic for LineEdit
+		UIControlType.X: # Logic for LineEdit
 			# First, calculate the caret's final local X position using the same logic as get_native_caret_local_pos.
 			var column: int = current_ui_control.get_caret_column()
 			var text_before: String = current_ui_control.text.substr(0, column)
@@ -159,7 +160,7 @@ func is_ui_caret_not_visible() -> bool:
 			var stylebox: StyleBox = current_ui_control.get_theme_stylebox("focus" if current_ui_control.has_focus() else "normal")
 			var margin_left: float = stylebox.get_content_margin(SIDE_LEFT)
 			
-			var final_caret_local_x = (caret_absolute_pos_x + scroll_offset) + margin_left
+			var final_caret_local_x :float = (caret_absolute_pos_x + scroll_offset) + margin_left
 
 			# Now, determine the boundaries of the visible content area.
 			var right_bound: float = current_ui_control.size.x - stylebox.get_content_margin(SIDE_RIGHT)
@@ -169,10 +170,10 @@ func is_ui_caret_not_visible() -> bool:
 			# from disappearing exactly at the edge due to floating point inaccuracies.
 			return final_caret_local_x < margin_left or final_caret_local_x > (right_bound + 1.0)
 
-		ui_control_type.X | ui_control_type.Y: # Logic for TextEdit
+		UIControlType.X | UIControlType.Y: # Logic for TextEdit
 			var caret_line: int = current_ui_control.get_caret_line()
-			var first_visible_line = current_ui_control.get_first_visible_line()
-			var last_visible_line = first_visible_line + get_visible_line_count()
+			var first_visible_line : int = current_ui_control.get_first_visible_line()
+			var last_visible_line : int = first_visible_line + get_visible_line_count()
 			return caret_line < first_visible_line or caret_line > last_visible_line
 			
 	return false
