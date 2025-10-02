@@ -1,5 +1,4 @@
-extends Control
-class_name ControllerCaret
+class_name caret_indicator extends Control
 @export var caret: TextureButton
 
 func set_caret_texture(texture2D: Texture2D) -> void:

@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3 uid="uid://c3kubqd85d2bk"]
+[gd_scene format=3 uid="uid://c3kubqd85d2bk"]
 
 [ext_resource type="Script" uid="uid://bjkm4k4m00d7u" path="res://MobileCaret/addons/MobileCaret/CaretsController/Caret/caret.gd" id="1_kdovb"]
 

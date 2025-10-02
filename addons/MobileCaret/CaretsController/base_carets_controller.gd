@@ -8,12 +8,12 @@ extends Control
 @export var texture_caret: Texture2D
 
 # Reference to the first caret handle, set from the Inspector.
-@export var caret_one: ControllerCaret
+@export var caret_one: caret_indicator
 # Reference to the second caret handle, set from the Inspector.
-@export var caret_two: ControllerCaret
+@export var caret_two: caret_indicator
 
 # The currently selected/dragged caret handle.
-var current_selected_caret: ControllerCaret = null
+var current_selected_caret: caret_indicator = null
 # A flag to track if a drag operation is in progress.
 var _is_caret_drag: bool = false
 # A cache for the font of the current UI control.

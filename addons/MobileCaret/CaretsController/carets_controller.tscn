@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://wm6yoyyhemvy" path="res://MobileCaret/addons/MobileCaret/CaretsController/carets_controller.gd" id="1_s61ly"]
 [ext_resource type="Texture2D" uid="uid://qsp6fuxjam7d" path="res://MobileCaret/addons/MobileCaret/CaretsController/icon.svg" id="2_w4hwp"]
-[ext_resource type="PackedScene" uid="uid://c3kubqd85d2bk" path="res://MobileCaret/addons/MobileCaret/CaretsController/Caret/caret.tscn" id="3_h61l0"]
+[ext_resource type="PackedScene" uid="uid://c3kubqd85d2bk" path="res://MobileCaret/addons/MobileCaret/CaretsController/Caret/caret_indicator.tscn" id="3_h61l0"]
 
 [node name="carets_controller" type="Control" node_paths=PackedStringArray("caret_one", "caret_two")]
 layout_mode = 3

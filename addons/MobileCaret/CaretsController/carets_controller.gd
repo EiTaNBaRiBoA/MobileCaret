@@ -1,6 +1,6 @@
 # Manages the primary logic for mobile caret interaction, including selection and dragging.
 # This script builds upon the base functionality provided by `base_carets_controller`.
-extends base_carets_controller
+class_name carets_controller extends base_carets_controller
 
 
 # Stores the starting position of a text selection for a TextEdit node.
@@ -21,7 +21,7 @@ func _ready() -> void:
 # Called every frame. The main loop for managing caret state.
 func _process(_delta: float) -> void:
 	# Get the UI element that currently has focus.
-	var current_focused_ui : Control = get_viewport().gui_get_focus_owner()
+	var current_focused_ui: Control = get_viewport().gui_get_focus_owner()
 
 	# If the focused element is a supported text control...
 	if update_current_ui_control(current_focused_ui):
@@ -41,7 +41,7 @@ func _process(_delta: float) -> void:
 		# If the user just pressed the caret, initiate the selection.
 		if Input.is_action_just_pressed("click"):
 			# Ensure the caret is a valid child before proceeding.
-			if current_focused_ui.get_parent() == null && current_focused_ui.get_parent() is not ControllerCaret: return
+			if current_focused_ui.get_parent() == null && current_focused_ui.get_parent() is not caret_indicator: return
 			on_caret_selected(current_focused_ui.get_parent())
 		# If the drag flag is active, continue handling the drag.
 		if _is_caret_drag:
@@ -73,7 +73,7 @@ func on_ui_update() -> void:
 
 
 # Called when a user presses a caret handle.
-func on_caret_selected(caret_focused: ControllerCaret) -> void:
+func on_caret_selected(caret_focused: caret_indicator) -> void:
 	if current_selected_caret != caret_focused:
 		_start_caret_selection(caret_focused)
 
@@ -111,7 +111,7 @@ func _update_carets_to_typing_pos() -> void:
 	# If a caret is being dragged, update its position. The other caret's position
 	# is handled by the selection logic.
 	if current_selected_caret != null:
-		var _not_current_caret: ControllerCaret = caret_two if (current_selected_caret == caret_one) else caret_one
+		var _not_current_caret: caret_indicator = caret_two if (current_selected_caret == caret_one) else caret_one
 		current_selected_caret.global_position = caret_pos_global + _calculate_caret_offset(get_font_size())
 	# If not selecting, position both carets at the typing cursor (only one will be visible).
 	else:
@@ -119,7 +119,7 @@ func _update_carets_to_typing_pos() -> void:
 		caret_two.global_position = caret_one.global_position
 
 # Sets up the initial state when a selection drag begins.
-func _start_caret_selection(caret_focused: ControllerCaret) -> void:
+func _start_caret_selection(caret_focused: caret_indicator) -> void:
 	_is_caret_drag = true
 	#caret_focused.grab_focus()
 	current_selected_caret = caret_focused
@@ -157,7 +157,7 @@ func _select_text_line_edit() -> void:
 	current_ui_control.select(min(pos1, pos2), max(pos1, pos2))
 	
 	# Update the native caret position to match the dragged handle.
-	var active_pos : int = _get_char_index_from_pos(current_selected_caret)
+	var active_pos: int = _get_char_index_from_pos(current_selected_caret)
 	current_ui_control.set_caret_column(active_pos)
 
 # Manages text selection logic for a TextEdit control using Godot 4 API.
@@ -209,7 +209,7 @@ func _select_text_text_edit() -> void:
 	current_ui_control.select(_selection_anchor_line, _selection_anchor_col, new_line, new_col)
 		
 	# Update the visual position of the anchor handle (the one not being dragged).
-	var anchor_controller: ControllerCaret = caret_one if current_selected_caret == caret_two else caret_two
+	var anchor_controller: caret_indicator = caret_one if current_selected_caret == caret_two else caret_two
 	
 	# Get the local position of the anchor handle
 	# get_rect_at_line_column() returns the Rect2 for the character. Its '.position' gives the Vector2.
@@ -240,7 +240,7 @@ func update_caret_visibility() -> void:
 		caret_two.show_caret()
 
 # Determines the character index in a LineEdit from a caret's global position.
-func _get_char_index_from_pos(controller: ControllerCaret) -> int:
+func _get_char_index_from_pos(controller: caret_indicator) -> int:
 	if not current_ui_control is LineEdit: return 0
 	
 	# 1. Get the LineEdit's global transform and create its inverse.
@@ -266,7 +266,7 @@ func _get_char_index_from_pos(controller: ControllerCaret) -> int:
 	var closest_index: int = 0
 	var min_dist: float = INF
 	
-	for i : int in range(text.length() + 1):
+	for i: int in range(text.length() + 1):
 		var char_pos: float = get_font().get_string_size(text.substr(0, i), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 		var dist: float = abs(target_x_in_string - char_pos)
 		
