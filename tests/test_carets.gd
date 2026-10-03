@@ -36,6 +36,7 @@ func _ready() -> void:
 	await _test_text_edit_edge_scroll()
 	await _test_long_press()
 	await _test_drag_precision()
+	await _test_drag_stays_on_text()
 	await _test_native_caret_hiding()
 	await _test_caret_fade()
 	await _test_edge_scroll_steadiness()
@@ -776,4 +777,78 @@ func _test_edge_scroll_steadiness() -> void:
 		await _frames(3)
 	edit.text = "The quick brown fox jumps over the lazy dog.\nSecond line of the wrapped text edit, long enough that it needs to wrap around the edge.\nThird line.\nFourth line.\nFifth line."
 	edit.scroll_vertical = 0
+	await _frames(2)
+
+# The dragged handle follows the finger sideways but never goes past the end of the text.
+func _test_drag_stays_on_text() -> void:
+	print("\n== Dragged handle stays on the text")
+	var line_edit: LineEdit = _node("LineEdit") as LineEdit
+	line_edit.text = "Drag the handle"
+	await _focus(line_edit)
+	line_edit.deselect()
+	line_edit.caret_column = 4
+	await _frames(3)
+	var rect: Rect2 = line_edit.get_global_rect()
+	var handle: caret_indicator = _handle(0)
+	var start: Vector2 = handle.global_position + handle.size * 0.5
+	_mouse_move(start)
+	_mouse_button(start, true)
+	await _frames(1)
+	var far: Vector2 = Vector2(rect.end.x - 30.0, start.y)
+	for i: int in range(1, 7):
+		_mouse_move(start.lerp(far, float(i) / 6.0))
+		await _frames(1)
+	await _frames(3)
+	var end_tip: Vector2 = _tip_of(line_edit, Vector2i(line_edit.text.length(), 0))
+	_check(line_edit.caret_column == line_edit.text.length(), "LineEdit: caret goes to the end of the text (col %d)" % line_edit.caret_column)
+	_check(absf(handle.get_tip().x - end_tip.x) < 1.5, "LineEdit: handle stops at the end of the text, not the end of the box (tip x %.1f, text end %.1f, box end %.1f)" % [handle.get_tip().x, end_tip.x, rect.end.x])
+	_mouse_button(far, false)
+	await _frames(3)
+	_check(absf(handle.get_tip().x - end_tip.x) < 1.5, "LineEdit: handle stays at the text end after release")
+
+	# Dragging back inside the text still follows the finger smoothly.
+	var x_a: float = _tip_of(line_edit, Vector2i(5, 0)).x
+	var x_b: float = _tip_of(line_edit, Vector2i(6, 0)).x
+	var mid_x: float = x_a + (x_b - x_a) * 0.3
+	var start2: Vector2 = handle.global_position + handle.size * 0.5
+	_mouse_move(start2)
+	_mouse_button(start2, true)
+	await _frames(1)
+	var target2: Vector2 = Vector2(start2.x + (mid_x - handle.get_tip().x), start2.y)
+	for i: int in range(1, 7):
+		_mouse_move(start2.lerp(target2, float(i) / 6.0))
+		await _frames(1)
+	await _frames(2)
+	_check(absf(handle.get_tip().x - mid_x) < 1.5, "LineEdit: inside the text the handle still follows the finger (tip %.1f vs finger %.1f)" % [handle.get_tip().x, mid_x])
+	_mouse_button(target2, false)
+	await _frames(2)
+
+	# TextEdit: a short second line; dragging far right along it must not leave the text.
+	var edit: TextEdit = _node("NoWrapTextEdit") as TextEdit
+	edit.text = "A single very long line that does not wrap and therefore scrolls sideways when the caret moves beyond the right edge of the control.\nShort line."
+	await _focus(edit)
+	edit.scroll_horizontal = 0
+	edit.scroll_vertical = 0
+	edit.deselect()
+	edit.set_caret_line(1)
+	edit.set_caret_column(3)
+	await _frames(3)
+	var h2: caret_indicator = _handle(0)
+	var r2: Rect2 = edit.get_global_rect()
+	var s2: Vector2 = h2.global_position + h2.size * 0.5
+	_mouse_move(s2)
+	_mouse_button(s2, true)
+	await _frames(1)
+	var f2: Vector2 = Vector2(r2.end.x - 30.0, s2.y)
+	for i: int in range(1, 7):
+		_mouse_move(s2.lerp(f2, float(i) / 6.0))
+		await _frames(1)
+	await _frames(3)
+	var line_end: Vector2 = _tip_of(edit, Vector2i(edit.get_line(1).length(), 1))
+	_check(edit.get_caret_line() == 1 and edit.get_caret_column() == edit.get_line(1).length(), "TextEdit: caret goes to the end of the short line (%d,%d)" % [edit.get_caret_column(), edit.get_caret_line()])
+	_check(absf(h2.get_tip().x - line_end.x) < 1.5, "TextEdit: handle stops at the end of the short line, not the end of the box (tip x %.1f, line end %.1f, box end %.1f)" % [h2.get_tip().x, line_end.x, r2.end.x])
+	_mouse_button(f2, false)
+	await _frames(3)
+	edit.text = "A single very long line that does not wrap and therefore scrolls sideways when the caret moves beyond the right edge of the control.\nShort line."
+	line_edit.text = "Drag the handle under the caret to move it"
 	await _frames(2)

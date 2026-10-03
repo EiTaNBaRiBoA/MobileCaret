@@ -72,6 +72,18 @@ func get_line_height() -> float:
 func get_pos_at_local(_local: Vector2) -> Vector2i:
 	return Vector2i.ZERO
 
+# Horizontal extent (local x) of the text on the row at `local_y`: from the first to the last
+# caret position of that row. A side whose end is scrolled out of view is -INF / INF.
+func get_row_x_extent(local_y: float) -> Vector2:
+	var first: Vector2i = get_pos_at_local(Vector2(-1.0e6, local_y))
+	var last: Vector2i = get_pos_at_local(Vector2(1.0e6, local_y))
+	var low: float = -INF
+	var high: float = INF
+	if is_pos_visible(first):
+		low = get_tip_local(first).x
+	if is_pos_visible(last):
+		high = get_tip_local(last).x
+	return Vector2(low, high)
 # Position a dragged handle should select for the local point `local`.
 # Also scrolls the control when the point is dragged past an edge.
 func get_drag_target(local: Vector2, _current: Vector2i, _delta: float) -> Vector2i:

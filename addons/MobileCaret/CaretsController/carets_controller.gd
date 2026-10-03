@@ -231,7 +231,18 @@ func _place(handle: caret_indicator, pos: Vector2i, handle_style: caret_indicato
 		tip += caret_texture_offset
 	if dragging:
 		var bounds: Rect2 = _adapter.control.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, _adapter.control.size)
-		tip.x = clampf(_drag_tip.x, bounds.position.x, bounds.end.x)
+		# Follow the finger sideways, but never past the end of the text on this row (or the control).
+		var to_viewport: Transform2D = _adapter.control.get_global_transform_with_canvas()
+		var low: float = bounds.position.x
+		var high: float = bounds.end.x
+		if pos_visible:
+			var row_y: float = _adapter.get_tip_local(pos).y - _adapter.get_line_height() * 0.5
+			var extent: Vector2 = _adapter.get_row_x_extent(row_y)
+			if not is_inf(extent.x):
+				low = maxf(low, (to_viewport * Vector2(extent.x, row_y)).x + caret_texture_offset.x)
+			if not is_inf(extent.y):
+				high = minf(high, (to_viewport * Vector2(extent.y, row_y)).x + caret_texture_offset.x)
+		tip.x = clampf(_drag_tip.x, minf(low, high), high)
 		tip.y = clampf(tip.y, bounds.position.y + _adapter.get_line_height(), bounds.end.y)
 	handle.set_tip(tip)
 	handle.modulate.a = _caret_alpha if handle_style == caret_indicator.Style.CARET else 1.0
