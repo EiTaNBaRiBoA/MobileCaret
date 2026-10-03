@@ -16,9 +16,14 @@ func _ready() -> void:
 	for arg: String in OS.get_cmdline_user_args():
 		if arg.begins_with("--shots="):
 			_screenshots_dir = arg.trim_prefix("--shots=")
+	_apply_window_args()
 	_controller = get_node("/root/MobileCaret") as carets_controller
 	_example = (load(EXAMPLE_SCENE) as PackedScene).instantiate()
 	add_child(_example)
+	# Keep the tested columns/lines on screen whatever the window shape: a smaller LineEdit font
+	# and a TextEdit tall enough for all five lines even when they wrap more.
+	(_node("LineEdit") as LineEdit).add_theme_font_size_override("font_size", 32)
+	(_node("TextEdit") as TextEdit).custom_minimum_size.y = 400.0
 	await _frames(3)
 
 	await _test_line_edit_geometry()
@@ -40,6 +45,26 @@ func _ready() -> void:
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
 
+
+# Optional window setup from the command line, to test other aspect ratios and stretch modes:
+#   -- --stretch=disabled|canvas_items|viewport --aspect=keep|expand|ignore|keep_width|keep_height --scale=2.0
+func _apply_window_args() -> void:
+	var window: Window = get_window()
+	for arg: String in OS.get_cmdline_user_args():
+		if arg.begins_with("--stretch="):
+			match arg.trim_prefix("--stretch="):
+				"disabled": window.content_scale_mode = Window.CONTENT_SCALE_MODE_DISABLED
+				"canvas_items": window.content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+				"viewport": window.content_scale_mode = Window.CONTENT_SCALE_MODE_VIEWPORT
+		elif arg.begins_with("--aspect="):
+			match arg.trim_prefix("--aspect="):
+				"keep": window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP
+				"expand": window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_EXPAND
+				"ignore": window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_IGNORE
+				"keep_width": window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP_WIDTH
+				"keep_height": window.content_scale_aspect = Window.CONTENT_SCALE_ASPECT_KEEP_HEIGHT
+		elif arg.begins_with("--scale="):
+			window.content_scale_factor = arg.trim_prefix("--scale=").to_float()
 
 #region Helpers
 
@@ -212,8 +237,9 @@ func _test_line_edit_selection() -> void:
 	_check(edit.has_selection() and edit.get_selection_from_column() == 3 and edit.get_selection_to_column() == 14, "end handle extends selection to 3..14 (got %s)" % [_sel(edit)])
 	_check(edit.has_focus(), "focus retained after selection drag")
 
+	var dbg_h0: String = "h0 tip %s vis %s | h1 tip %s vis %s | size %s scroll %s | target tip %s" % [str(_handle(0).get_tip()), _handle(0).visible, str(_handle(1).get_tip()), _handle(1).visible, str(edit.size), str(edit.get_scroll_offset()), str(_tip_of(edit, Vector2i(6, 0)))]
 	await _drag_handle_to(_handle(0), _tip_of(edit, Vector2i(6, 0)))
-	_check(edit.has_selection() and edit.get_selection_from_column() == 6 and edit.get_selection_to_column() == 14, "start handle shrinks selection to 6..14 (got %s)" % [_sel(edit)])
+	_check(edit.has_selection() and edit.get_selection_from_column() == 6 and edit.get_selection_to_column() == 14, "start handle shrinks selection to 6..14 (got %s) %s" % [_sel(edit), dbg_h0])
 
 	# Drag the start handle past the end handle: the selection flips.
 	var start_handle: caret_indicator = _handle(0) if _handle(0).get_tip().x < _handle(1).get_tip().x else _handle(1)
@@ -224,7 +250,7 @@ func _test_line_edit_selection() -> void:
 func _test_line_edit_edge_scroll() -> void:
 	print("\n== LineEdit edge scroll")
 	var edit: LineEdit = _node("LineEdit") as LineEdit
-	edit.text = "The quick brown fox jumps over the lazy dog and keeps on running far away"
+	edit.text = "The quick brown fox jumps over the lazy dog and keeps on running far away ".repeat(int(edit.size.x / 400.0) + 1)
 	await _focus(edit)
 	edit.caret_column = 3
 	await _frames(3)
@@ -354,9 +380,9 @@ func _test_text_edit_edge_scroll() -> void:
 	await _screenshot("textedit_scrolled")
 	# Selection with the anchor scrolled out of view: only one handle should show.
 	edit.select(0, 2, scrolled_caret_line, 5)
-	edit.scroll_vertical = scrolled_caret_line - 2
+	edit.scroll_vertical = edit.get_scroll_pos_for_line(maxi(scrolled_caret_line - 2, 0))
 	await _frames(3)
-	_check(_visible_handles() == 1, "anchor handle hidden when its line is scrolled out of view (visible: %d)" % _visible_handles())
+	_check(_visible_handles() == 1, "anchor handle hidden when its line is scrolled out of view (visible: %d; h0 %s %s h1 %s %s; scroll %s first-vis %d caret %d sel-from %d size %s)" % [_visible_handles(), _handle(0).visible, str(_handle(0).get_tip()), _handle(1).visible, str(_handle(1).get_tip()), str(edit.scroll_vertical), edit.get_first_visible_line(), scrolled_caret_line, edit.get_selection_from_line(), str(edit.size)])
 	edit.deselect()
 	edit.text = "The quick brown fox jumps over the lazy dog.\nSecond line of the wrapped text edit, long enough that it needs to wrap around the edge.\nThird line.\nFourth line.\nFifth line."
 	edit.scroll_vertical = 0
@@ -383,8 +409,16 @@ func _test_long_press() -> void:
 	_check(_visible_handles() == 2, "selection handles shown after long press")
 
 	var text_edit: TextEdit = _node("TextEdit") as TextEdit
+	var saved_scale_mode: Window.ContentScaleMode = get_window().content_scale_mode
 	get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_DISABLED
 	await _frames(3)
+	if not get_viewport().get_final_transform().is_equal_approx(Transform2D.IDENTITY):
+		# TextEdit's click-hold timer reads the viewport's stored mouse position, which injected
+		# events get wrong whenever any scaling is active. The LineEdit long press above covers it.
+		print("skip: TextEdit long press (injected input is inexact under scaling)")
+		get_window().content_scale_mode = saved_scale_mode
+		await _frames(3)
+		return
 	await _focus(text_edit)
 	text_edit.deselect()
 	text_edit.set_caret_line(0)
@@ -402,7 +436,7 @@ func _test_long_press() -> void:
 	_mouse_button(tpoint, false)
 	await _frames(2)
 	_check(not expected_text.is_empty() and text_edit.get_selected_text() == expected_text, "TextEdit long press selects word under the finger (expected '%s', got '%s')" % [expected_text, text_edit.get_selected_text()])
-	get_window().content_scale_mode = Window.CONTENT_SCALE_MODE_CANVAS_ITEMS
+	get_window().content_scale_mode = saved_scale_mode
 	await _frames(3)
 
 func _test_focus_changes() -> void:

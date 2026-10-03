@@ -44,6 +44,13 @@ var _drag_has_anchor: bool = false
 var _drag_anchor: Vector2i = Vector2i.ZERO
 # Where the dragged handle's tip should be (viewport space).
 var _drag_tip: Vector2 = Vector2.ZERO
+# The drag only takes effect once the pointer has moved this far (viewport pixels) from the press,
+# so touching a handle without moving never changes the caret or starts edge-scrolling.
+const DRAG_THRESHOLD: float = 6.0
+# Longest frame time used for edge-scrolling, so one slow frame can't make the caret leap.
+const MAX_DRAG_DELTA: float = 0.05
+var _drag_press_pointer: Vector2 = Vector2.ZERO
+var _drag_moved: bool = false
 # Pointer-to-tip offset at the start of the drag, so the handle doesn't jump under the finger.
 var _drag_grab_offset: Vector2 = Vector2.ZERO
 
@@ -178,7 +185,7 @@ func _update_handles() -> void:
 # following the finger while the caret row is scrolled or clipped at an edge.
 func _place(handle: caret_indicator, pos: Vector2i, handle_style: caret_indicator.Style, dragging: bool = false) -> void:
 	var pos_visible: bool = _adapter.is_pos_visible(pos)
-	if not pos_visible and not dragging:
+	if not dragging and (not pos_visible or _is_clipped_by_ancestor(pos)):
 		handle.hide()
 		return
 	handle.style = handle_style
@@ -195,6 +202,23 @@ func _place(handle: caret_indicator, pos: Vector2i, handle_style: caret_indicato
 	handle.modulate.a = _caret_alpha if handle_style == caret_indicator.Style.CARET else 1.0
 	handle.show()
 
+
+# True if a text position lies outside the clip area of an ancestor (e.g. a ScrollContainer that
+# has scrolled the text control, or part of it, out of view).
+func _is_clipped_by_ancestor(pos: Vector2i) -> bool:
+	var control: Control = _adapter.control
+	var middle: Vector2 = _adapter.get_tip_local(pos) - Vector2(0.0, _adapter.get_line_height() * 0.5)
+	var point: Vector2 = control.get_global_transform_with_canvas() * middle
+	var node: Node = control.get_parent()
+	while node is CanvasItem:
+		if node is Control:
+			var ancestor: Control = node
+			if ancestor.clip_contents:
+				var area: Rect2 = ancestor.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, ancestor.size)
+				if not area.has_point(point):
+					return true
+		node = node.get_parent()
+	return false
 
 static func _is_before(a: Vector2i, b: Vector2i) -> bool:
 	return a.y < b.y or (a.y == b.y and a.x < b.x)
@@ -224,6 +248,8 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and _drag_handle != null:
 		var motion: InputEventMouseMotion = event
 		_drag_tip = motion.position + _drag_grab_offset
+		if not _drag_moved and motion.position.distance_to(_drag_press_pointer) > DRAG_THRESHOLD:
+			_drag_moved = true
 		get_viewport().set_input_as_handled()
 
 # The visible handle under a viewport-space point (the closest one if both overlap).
@@ -240,6 +266,8 @@ func _handle_at(point: Vector2) -> caret_indicator:
 
 func _begin_drag(handle: caret_indicator, pointer: Vector2) -> void:
 	_drag_handle = handle
+	_drag_press_pointer = pointer
+	_drag_moved = false
 	_drag_grab_offset = handle.get_tip() - pointer
 	_drag_tip = handle.get_tip()
 	_pressing = false
@@ -255,6 +283,9 @@ func _end_drag() -> void:
 
 # Applies the drag every frame, so edge-scrolling continues while the finger rests still.
 func _step_drag(delta: float) -> void:
+	if not _drag_moved:
+		return
+	delta = minf(delta, MAX_DRAG_DELTA)
 	var control: Control = _adapter.control
 	# The tip is at the bottom of the caret; aim at the middle of that line.
 	var to_local: Transform2D = control.get_global_transform_with_canvas().affine_inverse()
