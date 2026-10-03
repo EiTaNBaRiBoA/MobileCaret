@@ -1,15 +1,14 @@
-[gd_scene load_steps=5 format=3 uid="uid://bh7oe51jp8ueg"]
-
-[ext_resource type="PackedScene" uid="uid://drn0vrtfhsgwp" path="res://MobileCaret/addons/MobileCaret/CaretsController/carets_controller.tscn" id="1_t1di0"]
+[gd_scene format=3 uid="uid://bh7oe51jp8ueg"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_phk0k"]
 bg_color = Color(1, 1, 1, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_iwc8h"]
 bg_color = Color(0.903598, 0.903598, 0.903598, 1)
-
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_n8j2d"]
-bg_color = Color(0.903598, 0.903598, 0.903598, 1)
+content_margin_left = 8.0
+content_margin_top = 4.0
+content_margin_right = 8.0
+content_margin_bottom = 4.0
 
 [node name="ExampleScene" type="Control"]
 layout_mode = 3
@@ -35,10 +34,10 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_constants/margin_left = 50
-theme_override_constants/margin_top = 50
-theme_override_constants/margin_right = 50
-theme_override_constants/margin_bottom = 50
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 20
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer"]
 layout_mode = 2
@@ -46,43 +45,78 @@ layout_mode = 2
 [node name="LineEditTitle" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_font_sizes/font_size = 36
-text = "LineEdit test"
+text = "LineEdit (large font)"
 
 [node name="LineEdit" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_colors/font_selected_color = Color(1, 1, 1, 1)
-theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_colors/font_placeholder_color = Color(0.67069, 0.67069, 0.67069, 1)
 theme_override_colors/caret_color = Color(0, 0, 0, 1)
-theme_override_font_sizes/font_size = 126
+theme_override_font_sizes/font_size = 48
 theme_override_styles/normal = SubResource("StyleBoxFlat_iwc8h")
 theme_override_styles/read_only = SubResource("StyleBoxFlat_iwc8h")
 theme_override_styles/focus = SubResource("StyleBoxFlat_iwc8h")
+text = "Drag the handle under the caret to move it"
 placeholder_text = "Write text here...."
 caret_blink = true
+
+[node name="CenteredTitle" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "LineEdit (centered)"
+
+[node name="CenteredLineEdit" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_colors/font_selected_color = Color(1, 1, 1, 1)
+theme_override_colors/caret_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("StyleBoxFlat_iwc8h")
+theme_override_styles/focus = SubResource("StyleBoxFlat_iwc8h")
+text = "centered text"
+alignment = 1
 
 [node name="TextEditTitle" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_font_sizes/font_size = 36
-text = "LineEdit test"
+text = "TextEdit (wrapped)"
 
 [node name="TextEdit" type="TextEdit" parent="Panel/MarginContainer/VBoxContainer"]
-custom_minimum_size = Vector2(0, 80)
+custom_minimum_size = Vector2(0, 200)
 layout_mode = 2
 theme_override_colors/caret_color = Color(0, 0, 0, 1)
 theme_override_colors/font_selected_color = Color(1, 1, 1, 1)
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_colors/font_placeholder_color = Color(0.505344, 0.505344, 0.505344, 1)
-theme_override_font_sizes/font_size = 16
-theme_override_styles/normal = SubResource("StyleBoxFlat_n8j2d")
-theme_override_styles/focus = SubResource("StyleBoxFlat_n8j2d")
-theme_override_styles/read_only = SubResource("StyleBoxFlat_n8j2d")
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("StyleBoxFlat_iwc8h")
+theme_override_styles/focus = SubResource("StyleBoxFlat_iwc8h")
+theme_override_styles/read_only = SubResource("StyleBoxFlat_iwc8h")
+text = "The quick brown fox jumps over the lazy dog.
+Second line of the wrapped text edit, long enough that it needs to wrap around the edge.
+Third line.
+Fourth line.
+Fifth line."
 placeholder_text = "Write text here..."
 wrap_mode = 1
 caret_blink = true
 
-[node name="carets_controller" parent="." instance=ExtResource("1_t1di0")]
-layout_mode = 0
+[node name="NoWrapTitle" type="Label" parent="Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+text = "TextEdit (no wrap, scrolls horizontally)"
+
+[node name="NoWrapTextEdit" type="TextEdit" parent="Panel/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/caret_color = Color(0, 0, 0, 1)
+theme_override_colors/font_selected_color = Color(1, 1, 1, 1)
+theme_override_colors/font_color = Color(0, 0, 0, 1)
+theme_override_font_sizes/font_size = 24
+theme_override_styles/normal = SubResource("StyleBoxFlat_iwc8h")
+theme_override_styles/focus = SubResource("StyleBoxFlat_iwc8h")
+text = "A single very long line that does not wrap and therefore scrolls sideways when the caret moves beyond the right edge of the control.
+Short line."
+caret_blink = true

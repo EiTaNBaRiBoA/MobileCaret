@@ -1,272 +1,266 @@
-# Manages the primary logic for mobile caret interaction, including selection and dragging.
-# This script builds upon the base functionality provided by `base_carets_controller`.
-class_name carets_controller extends base_carets_controller
+# Shows draggable caret handles for the focused LineEdit/TextEdit.
+#
+#  * No selection: one handle under the caret. Dragging it moves the caret.
+#  * Selection:    two handles (start/end). Dragging one moves that end of the selection;
+#                  the handles may cross.
+#  * Long-press on the text selects the word under the finger.
+#
+# Add the scene as an autoload (the plugin does this) and it works for every text control.
+# The handles live on a high CanvasLayer and never take focus from the text control.
+class_name carets_controller extends CanvasLayer
+
+# Optional custom handle texture. Leave empty to draw the default teardrop.
+@export var texture_caret: Texture2D
+# Extra offset applied to the handles, in pixels.
+@export var caret_texture_offset: Vector2 = Vector2.ZERO
+# Touch size of a handle, in pixels.
+@export var handle_size: Vector2 = Vector2(48.0, 56.0)
+@export var handle_color: Color = Color(0.2, 0.5, 1.0)
+# Extra pixels around a handle that still count as touching it.
+@export var hit_margin: float = 8.0
+# Seconds a press must be held (without moving) to select a word. 0 disables long-press.
+@export var long_press_seconds: float = 0.5
+
+# How far (in pixels) a press may move and still count as a long-press.
+const LONG_PRESS_TOLERANCE: float = 12.0
+
+var _root: Control
+var _handles: Array[caret_indicator] = []
+
+var _adapter: caret_text_adapter = null
+# The handle currently being dragged, if any.
+var _drag_handle: caret_indicator = null
+# True when the drag adjusts a selection; `_drag_anchor` is then the fixed end.
+var _drag_has_anchor: bool = false
+var _drag_anchor: Vector2i = Vector2i.ZERO
+# Where the dragged handle's tip should be (viewport space).
+var _drag_tip: Vector2 = Vector2.ZERO
+# Pointer-to-tip offset at the start of the drag, so the handle doesn't jump under the finger.
+var _drag_grab_offset: Vector2 = Vector2.ZERO
+
+var _pressing: bool = false
+var _press_position: Vector2 = Vector2.ZERO
+var _press_time: float = 0.0
+var _long_press_fired: bool = false
+var _long_press_pos: Vector2i = Vector2i.ZERO
 
 
-# Stores the starting position of a text selection for a TextEdit node.
-# The line where the selection gesture begins.
-var _selection_anchor_line: int = 0
-# The column where the selection gesture begins.
-var _selection_anchor_col: int = 0
-
-
-# Called when the node enters the scene tree for the first time.
-# Initializes the carets by hiding them and setting their textures.
 func _ready() -> void:
-	caret_one.hide_caret()
-	caret_two.hide_caret()
-	caret_one.set_caret_texture(texture_caret)
-	caret_two.set_caret_texture(texture_caret)
+	layer = 128
+	process_mode = Node.PROCESS_MODE_ALWAYS
 
-# Called every frame. The main loop for managing caret state.
-func _process(_delta: float) -> void:
-	# Get the UI element that currently has focus.
-	var current_focused_ui: Control = get_viewport().gui_get_focus_owner()
+	_root = Control.new()
+	_root.name = "Handles"
+	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.focus_mode = Control.FOCUS_NONE
+	_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(_root)
 
-	# If the focused element is a supported text control...
-	if update_current_ui_control(current_focused_ui):
-		# If focus has switched to a new text control...
-		if current_focused_ui != current_ui_control:
-			# Reset the old control and initialize the new one.
-			on_ui_deselected()
-			current_ui_control = current_focused_ui
-			on_ui_selected()
-		# Update caret positions every frame for the active control.
-		on_ui_update()
-	# If a caret was being dragged and the user released the touch/click...
-	elif current_selected_caret != null and Input.is_action_just_released("click") and _is_caret_drag:
-		on_carets_stop_dragging()
-	# If the user is interacting with a caret handle (which is a BaseButton)...
-	elif current_focused_ui is BaseButton:
-		# If the user just pressed the caret, initiate the selection.
-		if Input.is_action_just_pressed("click"):
-			# Ensure the caret is a valid child before proceeding.
-			var parent: Variant = current_focused_ui.get_parent()
-			if not is_instance_valid(parent) or not parent is caret_indicator:
-				return
-			on_caret_selected(parent)
-		# If the drag flag is active, continue handling the drag.
-		if _is_caret_drag:
-			on_caret_dragging()
-	# If the user clicks anywhere else that is not a caret...
-	elif Input.is_action_just_pressed("click") and not (current_focused_ui is BaseButton):
-		# Stop any active selection and hide carets.
-		on_carets_stop_dragging()
-	# If focus is lost or on an unsupported control...
-	else:
-		on_ui_deselected()
+	for i: int in 2:
+		var handle: caret_indicator = caret_indicator.new()
+		handle.name = "Handle%d" % (i + 1)
+		_root.add_child(handle)
+		_handles.append(handle)
+	_apply_appearance()
+
+	get_viewport().gui_focus_changed.connect(_on_focus_changed)
+	_on_focus_changed(get_viewport().gui_get_focus_owner())
 
 
-# Called once when a supported UI control is selected.
-func on_ui_selected() -> void:
-	pass
-
-# Called once when a supported UI control is deselected or loses focus.
-func on_ui_deselected() -> void:
-	reset_selection_state()
-	_is_caret_drag = false
-	current_selected_caret = null
-	caret_one.hide_caret()
-	caret_two.hide_caret()
-
-# Called every frame while a supported UI control is active.
-func on_ui_update() -> void:
-	_update_carets_to_typing_pos()
-
-
-# Called when a user presses a caret handle.
-func on_caret_selected(caret_focused: caret_indicator) -> void:
-	if current_selected_caret != caret_focused:
-		_start_caret_selection(caret_focused)
-
-# Called every frame while a caret handle is being dragged.
-func on_caret_dragging() -> void:
-	_handle_selection_drag()
-
-# Called when the user stops dragging a caret handle.
-func on_carets_stop_dragging() -> void:
-	_is_caret_drag = false
-	on_ui_update()
-	current_selected_caret = null
-
-# Updates the visibility and position of the carets based on the text cursor.
-func _update_carets_to_typing_pos() -> void:
-	# Hide carets if the control is invalid, empty, or the cursor is out of view.
-	if not is_instance_valid(current_ui_control) or is_ui_text_empty() or is_ui_caret_not_visible():
-		caret_one.hide_caret()
-		caret_two.hide_caret()
+func _process(delta: float) -> void:
+	if _adapter == null:
 		return
-	# If a selection is in progress, update visibility based on scrolling.
-	elif _is_caret_drag:
-		update_caret_visibility()
-	# If just typing (no selection), show only one caret.
-	else:
-		# Only show one caret when not selecting
-		caret_one.show_caret()
-		caret_two.hide_caret()
-
-	# Get the local position of the native typing cursor.
-	var caret_pos_local: Vector2 = get_native_caret_local_pos()
-	# Convert the local position to global screen coordinates.
-	var caret_pos_global: Vector2 = current_ui_control.global_position + caret_pos_local
-	
-	# If a caret is being dragged, its position is handled by the drag logic.
-	# If not, position the visible caret(s) at the typing cursor.
-	if not _is_caret_drag:
-		caret_one.global_position = caret_pos_global + _calculate_caret_offset(get_font_size())
-		caret_two.global_position = caret_one.global_position
-
-
-# Sets up the initial state when a selection drag begins.
-func _start_caret_selection(caret_focused: caret_indicator) -> void:
-	_is_caret_drag = true
-	current_selected_caret = caret_focused
-
-	caret_one.show_caret()
-	caret_two.show_caret()
-	
-	# Store the current cursor position as the fixed anchor for the selection.
-	match current_ui_type:
-		UIControlType.X: # LineEdit
-			_selection_anchor_line = 0 # Line is always 0 for LineEdit
-			_selection_anchor_col = current_ui_control.get_caret_column()
-		UIControlType.X | UIControlType.Y: # TextEdit
-			_selection_anchor_line = current_ui_control.get_caret_line()
-			_selection_anchor_col = current_ui_control.get_caret_column()
-	
-# Routes the drag handling to the appropriate function based on the control type.
-func _handle_selection_drag() -> void:
-	match current_ui_type:
-		UIControlType.X:
-			_select_text_line_edit()
-		UIControlType.X | UIControlType.Y:
-			_select_text_text_edit()
-
-
-# Manages text selection logic for a LineEdit control.
-func _select_text_line_edit() -> void:
-	current_selected_caret.global_position.x = get_global_mouse_position().x
-	
-	# Determine the start and end positions for the selection.
-	var pos1: int = _get_char_index_from_pos(caret_one)
-	var pos2: int = _get_char_index_from_pos(caret_two)
-	
-	current_ui_control.select(min(pos1, pos2), max(pos1, pos2))
-	
-	# Update the native caret position to match the dragged handle.
-	var active_pos: int = _get_char_index_from_pos(current_selected_caret)
-	current_ui_control.set_caret_column(active_pos)
-
-# Manages text selection logic for a TextEdit control.
-func _select_text_text_edit() -> void:
-	var line_count: int = current_ui_control.get_line_count()
-	if line_count == 0:
+	if not _adapter.is_valid() or not _adapter.control.is_visible_in_tree() or not _adapter.control.has_focus():
+		_set_control(null)
 		return
-
-	var mouse_pos: Vector2 = get_global_mouse_position()
-	
-	# STEP 1: Handle automatic scrolling when dragging near the control's edges.
-	var control_rect: Rect2 = current_ui_control.get_global_rect()
-	var scroll_speed: float = 300.0
-	var scroll_margin: float = 40.0
-
-	if mouse_pos.y < control_rect.position.y + scroll_margin:
-		current_ui_control.scroll_vertical -= scroll_speed * get_process_delta_time()
-	elif mouse_pos.y > control_rect.end.y - scroll_margin:
-		current_ui_control.scroll_vertical += scroll_speed * get_process_delta_time()
-
-	# STEP 2: Clamp the visual handle's position to within the control's bounds.
-	var clamped_pos: Vector2 = mouse_pos
-	clamped_pos.y = clamp(clamped_pos.y, control_rect.position.y, control_rect.end.y)
-	current_selected_caret.global_position = clamped_pos
-	
-	# STEP 3: Convert the handle's position to a line/column and update the selection.
-	var inverse_transform: Transform2D = current_ui_control.get_global_transform().affine_inverse()
-	var local_pos: Vector2 = inverse_transform * current_selected_caret.global_position
-	
-	var line_col_at_pos: Vector2i = current_ui_control.get_line_column_at_pos(local_pos, true)
-	var new_line: int = clamp(line_col_at_pos.y, 0, line_count - 1)
-	var new_col: int = clamp(line_col_at_pos.x, 0, current_ui_control.get_line(new_line).length())
-
-	# Update the native caret position without auto-scrolling (we handle it manually).
-	current_ui_control.set_caret_line(new_line, false, false)
-	current_ui_control.set_caret_column(new_col)
-	current_ui_control.select(_selection_anchor_line, _selection_anchor_col, new_line, new_col)
-		
-	# STEP 4: Update the visual position of the anchor handle (the one not being dragged).
-	var anchor_controller: caret_indicator = caret_one if current_selected_caret == caret_two else caret_two
-	var anchor_rect: Rect2 = current_ui_control.get_rect_at_line_column(_selection_anchor_line, _selection_anchor_col)
-	var anchor_pos_local: Vector2 = anchor_rect.position
-	var anchor_pos_global: Vector2 = current_ui_control.get_global_transform() * anchor_pos_local
-	
-	anchor_controller.global_position = anchor_pos_global + _calculate_caret_offset(get_font_size())
-	
-	# STEP 5: Update visibility based on whether the anchor is visible.
-	update_caret_visibility()
+	_update_long_press(delta)
+	if _drag_handle != null:
+		_step_drag(delta)
+	_update_handles()
 
 
-#region Helper Functions
+# Re-applies texture/size/color, e.g. after changing the exported properties at runtime.
+func _apply_appearance() -> void:
+	for handle: caret_indicator in _handles:
+		handle.texture = texture_caret
+		handle.handle_color = handle_color
+		handle.set_handle_size(handle_size)
 
-# REVISED: Correctly hides the anchor caret if it scrolls out of view.
-func update_caret_visibility() -> void:
-	if not is_instance_valid(current_ui_control) or current_ui_type != (UIControlType.X | UIControlType.Y):
+
+#region Focus tracking
+
+func _on_focus_changed(focused: Control) -> void:
+	if focused == (_adapter.control if _adapter != null else null):
 		return
+	_set_control(focused)
 
-	var anchor_controller: caret_indicator = caret_two if (current_selected_caret == caret_one) else caret_one
-	
-	var first_visible_line: int = current_ui_control.get_first_visible_line()
-	var last_visible_line: int = first_visible_line + current_ui_control.get_visible_line_count() - 1
-
-	# Check if the anchor's line is outside the visible range.
-	if _selection_anchor_line < first_visible_line or _selection_anchor_line > last_visible_line:
-		# Anchor is out of view, so hide the anchor handle.
-		anchor_controller.hide()
-		current_selected_caret.show() # Ensure the active one is visible.
-	else:
-		# Anchor is in view, show both.
-		anchor_controller.show()
-		current_selected_caret.show()
-
-# Determines the character index in a LineEdit from a caret's global position.
-func _get_char_index_from_pos(controller: caret_indicator) -> int:
-	if not current_ui_control is LineEdit: return 0
-	
-	var inverse_transform: Transform2D = current_ui_control.get_global_transform().affine_inverse()
-	var local_pos: Vector2 = inverse_transform * controller.global_position
-
-	var scroll_offset: float = current_ui_control.get_scroll_offset()
-	var stylebox: StyleBox = current_ui_control.get_theme_stylebox("normal")
-	var margin_left: float = stylebox.get_content_margin(SIDE_LEFT)
-
-	var target_x_in_string: float = (local_pos.x - margin_left) + scroll_offset
-
-	var text: String = current_ui_control.text
-	var font_size: int = get_font_size()
-	var font: Font = get_font()
-	
-	var closest_index: int = 0
-	var min_dist: float = INF
-	
-	for i : int in range(text.length() + 1):
-		var char_pos: float = font.get_string_size(text.substr(0, i), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-		var dist: float = abs(target_x_in_string - char_pos)
-		
-		if dist < min_dist:
-			min_dist = dist
-			closest_index = i
-		else:
-			break # Optimization: Since character positions are monotonic, we can stop once the distance increases.
-			
-	return closest_index
+func _set_control(new_control: Control) -> void:
+	if _adapter != null and _adapter.is_valid():
+		var old: Control = _adapter.control
+		if old.gui_input.is_connected(_on_control_gui_input):
+			old.gui_input.disconnect(_on_control_gui_input)
+	_adapter = null
+	_drag_handle = null
+	_pressing = false
+	_hide_handles()
+	if not is_instance_valid(new_control):
+		return
+	_adapter = caret_text_adapter.for_control(new_control)
+	if _adapter != null:
+		new_control.gui_input.connect(_on_control_gui_input)
+		_update_handles()
 
 #endregion
 
 
-#region Optional
-# This function can be used to toggle the visibility of the native engine caret.
-#func _enable_native_caret(enable: bool) -> void:
-	#if not is_instance_valid(_line_edit): return
-	#var color: Color = _line_edit.get_theme_color("font_color")
-	#color.a = 1.0 if enable else 0.0
-	#_line_edit.add_theme_color_override("caret_color", color)
+#region Handle placement
+
+func _hide_handles() -> void:
+	for handle: caret_indicator in _handles:
+		handle.hide()
+
+func _update_handles() -> void:
+	var first: caret_indicator = _handles[0]
+	var second: caret_indicator = _handles[1]
+
+	if _drag_handle != null:
+		# While dragging, the dragged handle sits at the native caret and the other at the anchor.
+		var other: caret_indicator = second if _drag_handle == first else first
+		var caret: Vector2i = _adapter.get_caret()
+		if _drag_has_anchor:
+			var dragged_style: caret_indicator.Style = caret_indicator.Style.LEFT if _is_before(caret, _drag_anchor) else caret_indicator.Style.RIGHT
+			var other_style: caret_indicator.Style = caret_indicator.Style.RIGHT if dragged_style == caret_indicator.Style.LEFT else caret_indicator.Style.LEFT
+			_place(_drag_handle, caret, dragged_style)
+			_place(other, _drag_anchor, other_style)
+		else:
+			_place(_drag_handle, caret, caret_indicator.Style.CARET)
+			other.hide()
+	elif _adapter.has_selection():
+		_place(first, _adapter.get_selection_from(), caret_indicator.Style.LEFT)
+		_place(second, _adapter.get_selection_to(), caret_indicator.Style.RIGHT)
+	elif _adapter.is_empty():
+		_hide_handles()
+	else:
+		_place(first, _adapter.get_caret(), caret_indicator.Style.CARET)
+		second.hide()
+
+# Positions a handle at a text position, hiding it if that position is scrolled out of view.
+func _place(handle: caret_indicator, pos: Vector2i, handle_style: caret_indicator.Style) -> void:
+	if not _adapter.is_pos_visible(pos):
+		handle.hide()
+		return
+	handle.style = handle_style
+	# Text-control space -> viewport space (same space as the handle layer).
+	var tip: Vector2 = _adapter.control.get_global_transform_with_canvas() * _adapter.get_tip_local(pos)
+	handle.set_tip(tip + caret_texture_offset)
+	handle.show()
+
+static func _is_before(a: Vector2i, b: Vector2i) -> bool:
+	return a.y < b.y or (a.y == b.y and a.x < b.x)
+
+#endregion
+
+
+#region Dragging
+
+# Handles are hit-tested here instead of through the GUI: a press that reaches the GUI on
+# a non-text control would make the text control lose focus (and its selection).
+func _input(event: InputEvent) -> void:
+	if _adapter == null:
+		return
+	if event is InputEventMouseButton:
+		var button: InputEventMouseButton = event
+		if button.button_index != MOUSE_BUTTON_LEFT:
+			return
+		if button.pressed:
+			var handle: caret_indicator = _handle_at(button.position)
+			if handle != null:
+				_begin_drag(handle, button.position)
+				get_viewport().set_input_as_handled()
+		elif _drag_handle != null:
+			_end_drag()
+			get_viewport().set_input_as_handled()
+	elif event is InputEventMouseMotion and _drag_handle != null:
+		var motion: InputEventMouseMotion = event
+		_drag_tip = motion.position + _drag_grab_offset
+		get_viewport().set_input_as_handled()
+
+# The visible handle under a viewport-space point (the closest one if both overlap).
+func _handle_at(point: Vector2) -> caret_indicator:
+	var best: caret_indicator = null
+	var best_distance: float = INF
+	for handle: caret_indicator in _handles:
+		if handle.hits(point, hit_margin):
+			var distance: float = handle.get_tip().distance_to(point)
+			if distance < best_distance:
+				best = handle
+				best_distance = distance
+	return best
+
+func _begin_drag(handle: caret_indicator, pointer: Vector2) -> void:
+	_drag_handle = handle
+	_drag_grab_offset = handle.get_tip() - pointer
+	_drag_tip = handle.get_tip()
+	_pressing = false
+	_drag_has_anchor = _adapter.has_selection()
+	if _drag_has_anchor:
+		# The end that is not being dragged stays fixed.
+		_drag_anchor = _adapter.get_selection_to() if handle.style == caret_indicator.Style.LEFT else _adapter.get_selection_from()
+
+func _end_drag() -> void:
+	_drag_handle = null
+	if _adapter != null:
+		_update_handles()
+
+# Applies the drag every frame, so edge-scrolling continues while the finger rests still.
+func _step_drag(delta: float) -> void:
+	var control: Control = _adapter.control
+	# The tip is at the bottom of the caret; aim at the middle of that line.
+	var to_local: Transform2D = control.get_global_transform_with_canvas().affine_inverse()
+	var local: Vector2 = to_local * (_drag_tip - caret_texture_offset)
+	local.y -= _adapter.get_line_height() * 0.5
+	var target: Vector2i = _adapter.get_drag_target(local, _adapter.get_caret(), delta)
+	if _drag_has_anchor:
+		_adapter.select(_drag_anchor, target)
+	else:
+		_adapter.set_caret(target)
+
+#endregion
+
+
+#region Long press
+
+func _on_control_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var button: InputEventMouseButton = event
+		if button.button_index != MOUSE_BUTTON_LEFT:
+			return
+		if not button.pressed and _long_press_fired:
+			# The control's own release handling (which runs after this signal) would
+			# collapse the selection, so apply it again once that is done.
+			_reapply_long_press_selection.call_deferred()
+		_pressing = button.pressed
+		_press_position = button.position
+		if button.pressed:
+			# Resolve the text position now: the control may scroll while the press is held.
+			_long_press_pos = _adapter.get_pos_at_local(button.position)
+		_press_time = 0.0
+		_long_press_fired = false
+	elif event is InputEventMouseMotion and _pressing:
+		var motion: InputEventMouseMotion = event
+		if motion.position.distance_to(_press_position) > LONG_PRESS_TOLERANCE:
+			_pressing = false
+
+func _update_long_press(delta: float) -> void:
+	if not _pressing or _long_press_fired or long_press_seconds <= 0.0 or _drag_handle != null:
+		return
+	_press_time += delta
+	if _press_time >= long_press_seconds:
+		_long_press_fired = true
+		_adapter.select_word_at(_long_press_pos)
+
+func _reapply_long_press_selection() -> void:
+	if _adapter != null and _adapter.is_valid() and _drag_handle == null:
+		_adapter.select_word_at(_long_press_pos)
+
 #endregion

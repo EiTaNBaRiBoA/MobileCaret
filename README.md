@@ -15,12 +15,25 @@ Godot's built-in caret can be challenging to see and interact with on smaller sc
 
 ## Installation
 
-* **Coming Soon!** Detailed installation instructions will be provided as development progresses. 
+1. Copy `addons/MobileCaret` into your project's `addons/` folder.
+2. Enable **MobileCaret** in *Project Settings > Plugins*. This registers the `MobileCaret` autoload (or add `CaretsController/carets_controller.tscn` as an autoload yourself).
 
 ## Usage
 
-* The plugin automatically detects when a `LineEdit` or `TextEdit` gains focus and replaces the default caret with your custom one.
-* During text selection, you can drag the custom caret to adjust the selection range, making it easier to interact with on touchscreens.
+* The controller watches GUI focus: whenever a `LineEdit` or `TextEdit` is focused, a handle appears under its caret.
+* **No selection:** drag the handle to move the caret.
+* **Selection:** two handles (start/end) appear; drag either to adjust the selection. They may cross.
+* **Long-press** a word to select it.
+* Handles never take focus from the text control. Touch input must be emulated as mouse input (Godot's default `emulate_mouse_from_touch`).
+* Customize via the exported properties on the controller: `texture_caret`, `handle_size`, `handle_color`, `caret_texture_offset`, `hit_margin`, `long_press_seconds`.
+
+## Tests
+
+```
+godot --path <project> res://MobileCaret/tests/test_carets.tscn
+```
+
+Drives real input events against the example scene (exit code 0 = all pass).
 
 ## Important Notes
 
