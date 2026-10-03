@@ -20,6 +20,15 @@ class_name carets_controller extends CanvasLayer
 @export var hit_margin: float = 8.0
 # Seconds a press must be held (without moving) to select a word. 0 disables long-press.
 @export var long_press_seconds: float = 0.5
+# Hide Godot's own thin caret whenever a handle is showing (pure Android look).
+@export var hide_native_caret: bool = false
+# Hide Godot's own thin caret only while a handle is being dragged.
+@export var hide_native_caret_while_dragging: bool = true
+# Seconds without activity before the single caret handle fades out. 0 or less never fades it.
+# Selection handles never fade. Any caret move, tap or drag brings the handle back.
+@export var caret_fade_delay: float = 4.0
+# Seconds the fade-out/fade-in takes.
+@export var caret_fade_duration: float = 0.25
 
 # How far (in pixels) a press may move and still count as a long-press.
 const LONG_PRESS_TOLERANCE: float = 12.0
@@ -43,6 +52,16 @@ var _press_position: Vector2 = Vector2.ZERO
 var _press_time: float = 0.0
 var _long_press_fired: bool = false
 var _long_press_pos: Vector2i = Vector2i.ZERO
+
+# Idle tracking for the caret handle fade.
+var _idle_time: float = 0.0
+var _caret_alpha: float = 1.0
+var _last_caret: Vector2i = Vector2i.ZERO
+
+# Saved state of the control's caret_color override while the native caret is hidden.
+var _hidden_caret_control: Control = null
+var _had_caret_override: bool = false
+var _saved_caret_color: Color = Color.WHITE
 
 
 func _ready() -> void:
@@ -76,7 +95,13 @@ func _process(delta: float) -> void:
 	_update_long_press(delta)
 	if _drag_handle != null:
 		_step_drag(delta)
+	_update_fade(delta)
 	_update_handles()
+	_update_native_caret()
+
+
+func _exit_tree() -> void:
+	_set_native_caret_hidden(false)
 
 
 # Re-applies texture/size/color, e.g. after changing the exported properties at runtime.
@@ -95,6 +120,7 @@ func _on_focus_changed(focused: Control) -> void:
 	_set_control(focused)
 
 func _set_control(new_control: Control) -> void:
+	_set_native_caret_hidden(false)
 	if _adapter != null and _adapter.is_valid():
 		var old: Control = _adapter.control
 		if old.gui_input.is_connected(_on_control_gui_input):
@@ -102,6 +128,7 @@ func _set_control(new_control: Control) -> void:
 	_adapter = null
 	_drag_handle = null
 	_pressing = false
+	_mark_active()
 	_hide_handles()
 	if not is_instance_valid(new_control):
 		return
@@ -130,12 +157,13 @@ func _update_handles() -> void:
 		if _drag_has_anchor:
 			var dragged_style: caret_indicator.Style = caret_indicator.Style.LEFT if _is_before(caret, _drag_anchor) else caret_indicator.Style.RIGHT
 			var other_style: caret_indicator.Style = caret_indicator.Style.RIGHT if dragged_style == caret_indicator.Style.LEFT else caret_indicator.Style.LEFT
-			_place(_drag_handle, caret, dragged_style)
+			_place(_drag_handle, caret, dragged_style, _smooth_drag_x())
 			_place(other, _drag_anchor, other_style)
 		else:
-			_place(_drag_handle, caret, caret_indicator.Style.CARET)
+			_place(_drag_handle, caret, caret_indicator.Style.CARET, _smooth_drag_x())
 			other.hide()
 	elif _adapter.has_selection():
+		_mark_active()
 		_place(first, _adapter.get_selection_from(), caret_indicator.Style.LEFT)
 		_place(second, _adapter.get_selection_to(), caret_indicator.Style.RIGHT)
 	elif _adapter.is_empty():
@@ -145,15 +173,26 @@ func _update_handles() -> void:
 		second.hide()
 
 # Positions a handle at a text position, hiding it if that position is scrolled out of view.
-func _place(handle: caret_indicator, pos: Vector2i, handle_style: caret_indicator.Style) -> void:
+# `smooth_x` (viewport space, NaN for none) lets a dragged handle follow the finger
+# horizontally while the caret itself snaps to characters, like Android.
+func _place(handle: caret_indicator, pos: Vector2i, handle_style: caret_indicator.Style, smooth_x: float = NAN) -> void:
 	if not _adapter.is_pos_visible(pos):
 		handle.hide()
 		return
 	handle.style = handle_style
 	# Text-control space -> viewport space (same space as the handle layer).
 	var tip: Vector2 = _adapter.control.get_global_transform_with_canvas() * _adapter.get_tip_local(pos)
-	handle.set_tip(tip + caret_texture_offset)
+	tip += caret_texture_offset
+	if not is_nan(smooth_x):
+		tip.x = smooth_x
+	handle.set_tip(tip)
+	handle.modulate.a = _caret_alpha if handle_style == caret_indicator.Style.CARET else 1.0
 	handle.show()
+
+# Horizontal position of the dragged handle: the finger's x, kept inside the control.
+func _smooth_drag_x() -> float:
+	var bounds: Rect2 = _adapter.control.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, _adapter.control.size)
+	return clampf(_drag_tip.x, bounds.position.x, bounds.end.x)
 
 static func _is_before(a: Vector2i, b: Vector2i) -> bool:
 	return a.y < b.y or (a.y == b.y and a.x < b.x)
@@ -228,6 +267,54 @@ func _step_drag(delta: float) -> void:
 #endregion
 
 
+#region Fade and native caret
+
+func _mark_active() -> void:
+	_idle_time = 0.0
+
+# Fades the single caret handle out after `caret_fade_delay` seconds of inactivity.
+func _update_fade(delta: float) -> void:
+	var caret: Vector2i = _adapter.get_caret()
+	if caret != _last_caret or _drag_handle != null or _adapter.has_selection():
+		_mark_active()
+	_last_caret = caret
+	_idle_time += delta
+	var faded: bool = caret_fade_delay > 0.0 and _idle_time >= caret_fade_delay
+	_caret_alpha = move_toward(_caret_alpha, 0.0 if faded else 1.0, delta / maxf(caret_fade_duration, 0.001))
+
+# True when at least one handle is visibly shown (not hidden and not faded out).
+func _handles_showing() -> bool:
+	for handle: caret_indicator in _handles:
+		if handle.visible and handle.modulate.a > 0.5:
+			return true
+	return false
+
+func _update_native_caret() -> void:
+	var hide_it: bool = _handles_showing() and (hide_native_caret or (hide_native_caret_while_dragging and _drag_handle != null))
+	_set_native_caret_hidden(hide_it)
+
+# Makes the control's own caret transparent, remembering any existing override to restore it.
+func _set_native_caret_hidden(hidden: bool) -> void:
+	if hidden:
+		if _hidden_caret_control != null or _adapter == null:
+			return
+		_hidden_caret_control = _adapter.control
+		_had_caret_override = _hidden_caret_control.has_theme_color_override("caret_color")
+		_saved_caret_color = _hidden_caret_control.get_theme_color("caret_color")
+		var transparent: Color = _saved_caret_color
+		transparent.a = 0.0
+		_hidden_caret_control.add_theme_color_override("caret_color", transparent)
+	elif _hidden_caret_control != null:
+		if is_instance_valid(_hidden_caret_control):
+			if _had_caret_override:
+				_hidden_caret_control.add_theme_color_override("caret_color", _saved_caret_color)
+			else:
+				_hidden_caret_control.remove_theme_color_override("caret_color")
+		_hidden_caret_control = null
+
+#endregion
+
+
 #region Long press
 
 func _on_control_gui_input(event: InputEvent) -> void:
@@ -241,6 +328,7 @@ func _on_control_gui_input(event: InputEvent) -> void:
 			_reapply_long_press_selection.call_deferred()
 		_pressing = button.pressed
 		_press_position = button.position
+		_mark_active()
 		if button.pressed:
 			# Resolve the text position now: the control may scroll while the press is held.
 			_long_press_pos = _adapter.get_pos_at_local(button.position)

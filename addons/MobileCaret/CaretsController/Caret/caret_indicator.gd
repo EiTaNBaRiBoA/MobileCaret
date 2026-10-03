@@ -49,7 +49,8 @@ func get_tip() -> Vector2:
 
 # Whether a viewport-space point hits the handle, with `margin` extra pixels around it.
 func hits(point: Vector2, margin: float) -> bool:
-	return visible and Rect2(global_position, size).grow(margin).has_point(point)
+	# A (nearly) faded-out handle can no longer be grabbed.
+	return visible and modulate.a > 0.1 and Rect2(global_position, size).grow(margin).has_point(point)
 
 
 func _draw() -> void:

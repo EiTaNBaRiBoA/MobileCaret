@@ -28,6 +28,10 @@ func _ready() -> void:
 	await _test_text_edit_selection()
 	await _test_text_edit_edge_scroll()
 	await _test_long_press()
+	await _test_drag_precision()
+	await _test_native_caret_hiding()
+	await _test_caret_fade()
+	await _test_typing_and_taps()
 	await _test_focus_changes()
 
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -424,3 +428,237 @@ func _test_focus_changes() -> void:
 	await _frames(3)
 	_check(_visible_handles() == 0, "handles hidden when control is hidden")
 	edit.show()
+
+
+#region Drag precision, native caret, fade
+
+func _test_drag_precision() -> void:
+	print("\n== Drag precision")
+	var edit: LineEdit = _node("LineEdit") as LineEdit
+	edit.text = "Drag the handle under the caret to move it"
+	await _focus(edit)
+	edit.deselect()
+	edit.caret_column = 4
+	await _frames(3)
+	var handle: caret_indicator = _handle(0)
+	# Aim between columns 8 and 9, a bit closer to 9.
+	var x8: float = _tip_of(edit, Vector2i(8, 0)).x
+	var x9: float = _tip_of(edit, Vector2i(9, 0)).x
+	var target_x: float = x8 + (x9 - x8) * 0.7
+	var start_pointer: Vector2 = handle.global_position + handle.size * 0.5
+	var delta_x: float = target_x - handle.get_tip().x
+	_mouse_move(start_pointer)
+	_mouse_button(start_pointer, true)
+	await _frames(1)
+	for i: int in range(1, 7):
+		_mouse_move(start_pointer + Vector2(delta_x * i / 6.0, 0.0))
+		await _frames(1)
+	await _frames(2)
+	var snapped_y: float = _tip_of(edit, Vector2i(9, 0)).y
+	_check(absf(handle.get_tip().x - target_x) < 1.5, "mid-drag the handle follows the finger smoothly (tip x %.1f, finger x %.1f)" % [handle.get_tip().x, target_x])
+	_check(absf(handle.get_tip().y - snapped_y) < 1.5, "mid-drag the handle stays snapped to the text line")
+	_check(edit.caret_column == 9, "the caret snaps to the nearest character (got %d)" % edit.caret_column)
+	_mouse_button(start_pointer + Vector2(delta_x, 0.0), false)
+	await _frames(3)
+	_check(handle.get_tip().distance_to(_tip_of(edit, Vector2i(9, 0))) < 1.5, "after release the handle snaps to the caret")
+	# Dragging far outside the control keeps the handle inside it horizontally.
+	var far_pointer: Vector2 = handle.global_position + handle.size * 0.5
+	_mouse_move(far_pointer)
+	_mouse_button(far_pointer, true)
+	await _frames(1)
+	_mouse_move(Vector2(edit.get_global_rect().end.x + 200.0, far_pointer.y))
+	await _frames(3)
+	_check(handle.get_tip().x <= edit.get_global_rect().end.x + 0.5, "dragged handle is kept inside the control horizontally")
+	_mouse_button(far_pointer, false)
+	await _frames(2)
+
+func _caret_alpha(control: Control) -> float:
+	return control.get_theme_color("caret_color").a
+
+func _test_native_caret_hiding() -> void:
+	print("\n== Native caret hiding")
+	var edit: LineEdit = _node("CenteredLineEdit") as LineEdit
+	var other: LineEdit = _node("LineEdit") as LineEdit
+	edit.text = "centered text"
+	# Case 1: no override on the control -> removed again afterwards.
+	var original: Color = edit.get_theme_color("caret_color")
+	var had_override: bool = edit.has_theme_color_override("caret_color")
+	edit.remove_theme_color_override("caret_color")
+	var default_alpha: float = _caret_alpha(edit)
+	_controller.hide_native_caret = true
+	_controller.hide_native_caret_while_dragging = false
+	await _focus(edit)
+	edit.caret_column = 3
+	await _frames(3)
+	_check(_caret_alpha(edit) == 0.0, "hide_native_caret hides the native caret while the handle shows")
+	await _focus(other)
+	await _frames(3)
+	_check(not edit.has_theme_color_override("caret_color") and is_equal_approx(_caret_alpha(edit), default_alpha), "native caret restored (override removed) after focus leaves")
+	# Case 2: an existing override is restored exactly.
+	var custom: Color = Color(1.0, 0.0, 0.0, 0.8)
+	edit.add_theme_color_override("caret_color", custom)
+	await _focus(edit)
+	edit.caret_column = 3
+	await _frames(3)
+	_check(_caret_alpha(edit) == 0.0, "native caret hidden with an existing override")
+	await _focus(other)
+	await _frames(3)
+	_check(edit.has_theme_color_override("caret_color") and edit.get_theme_color("caret_color") == custom, "existing caret_color override restored exactly")
+	# Case 3: only while dragging.
+	_controller.hide_native_caret = false
+	_controller.hide_native_caret_while_dragging = true
+	await _focus(edit)
+	edit.deselect()
+	edit.caret_column = 3
+	await _frames(3)
+	_check(edit.get_theme_color("caret_color") == custom, "native caret visible when not dragging")
+	var handle: caret_indicator = _handle(0)
+	var pointer: Vector2 = handle.global_position + handle.size * 0.5
+	_mouse_move(pointer)
+	_mouse_button(pointer, true)
+	await _frames(1)
+	_mouse_move(pointer + Vector2(30.0, 0.0))
+	await _frames(3)
+	_check(_caret_alpha(edit) == 0.0, "native caret hidden while a handle is dragged")
+	_mouse_button(pointer + Vector2(30.0, 0.0), false)
+	await _frames(3)
+	_check(edit.get_theme_color("caret_color") == custom, "native caret back after the drag ends")
+	# Case 4: both off -> never touched.
+	_controller.hide_native_caret_while_dragging = false
+	await _focus(edit)
+	var pointer2: Vector2 = _handle(0).global_position + _handle(0).size * 0.5
+	_mouse_move(pointer2)
+	_mouse_button(pointer2, true)
+	await _frames(1)
+	_mouse_move(pointer2 + Vector2(20.0, 0.0))
+	await _frames(3)
+	_check(edit.get_theme_color("caret_color") == custom, "both toggles off leave the native caret alone")
+	_mouse_button(pointer2 + Vector2(20.0, 0.0), false)
+	await _frames(2)
+	# Restore the scene and defaults.
+	await _focus(other)
+	if had_override:
+		edit.add_theme_color_override("caret_color", original)
+	else:
+		edit.remove_theme_color_override("caret_color")
+	_controller.hide_native_caret = false
+	_controller.hide_native_caret_while_dragging = true
+
+func _test_caret_fade() -> void:
+	print("\n== Caret handle fade")
+	var edit: LineEdit = _node("LineEdit") as LineEdit
+	edit.text = "Drag the handle under the caret to move it"
+	_controller.caret_fade_delay = 0.4
+	_controller.caret_fade_duration = 0.1
+	await _focus(edit)
+	edit.deselect()
+	edit.caret_column = 5
+	await _frames(3)
+	_check(_handle(0).modulate.a > 0.99, "caret handle starts fully visible")
+	await get_tree().create_timer(0.9).timeout
+	_check(_handle(0).modulate.a < 0.05, "caret handle fades out after the idle delay (alpha %.2f)" % _handle(0).modulate.a)
+	# With the native caret hidden by the toggle, a faded handle must give the real caret back.
+	_controller.hide_native_caret = true
+	await _frames(3)
+	_check(_caret_alpha(edit) > 0.0, "native caret shown again while the handle is faded")
+	_controller.hide_native_caret = false
+	# A faded handle cannot be grabbed: the press reaches the text control.
+	var tip: Vector2 = _handle(0).get_tip()
+	var pointer: Vector2 = _handle(0).global_position + _handle(0).size * 0.5
+	_mouse_move(pointer)
+	_mouse_button(pointer, true)
+	await _frames(1)
+	_check(_controller._drag_handle == null, "a faded handle is not draggable")
+	_mouse_button(pointer, false)
+	await _frames(2)
+	# Activity (moving the caret) brings it back.
+	edit.caret_column = 8
+	await get_tree().create_timer(0.3).timeout
+	_check(_handle(0).modulate.a > 0.99, "moving the caret brings the handle back (alpha %.2f)" % _handle(0).modulate.a)
+	# A tap in the text also counts as activity.
+	await get_tree().create_timer(0.9).timeout
+	_check(_handle(0).modulate.a < 0.05, "faded again after idling")
+	await _click(_text_point(edit, Vector2i(6, 0)))
+	await get_tree().create_timer(0.3).timeout
+	_check(_handle(0).modulate.a > 0.99, "tapping the text brings the handle back")
+	# Selection handles never fade.
+	edit.select(2, 8)
+	await get_tree().create_timer(0.9).timeout
+	_check(_visible_handles() == 2 and _handle(0).modulate.a > 0.99 and _handle(1).modulate.a > 0.99, "selection handles never fade")
+	# Delay 0 disables fading entirely.
+	edit.deselect()
+	_controller.caret_fade_delay = 0.0
+	await get_tree().create_timer(0.9).timeout
+	_check(_handle(0).modulate.a > 0.99, "caret_fade_delay = 0 disables the fade")
+	_controller.caret_fade_delay = 4.0
+	_controller.caret_fade_duration = 0.25
+
+#endregion
+
+
+#region Typing and taps
+
+func _type(text: String) -> void:
+	for ch: String in text:
+		for pressed: bool in [true, false]:
+			var ev: InputEventKey = InputEventKey.new()
+			ev.pressed = pressed
+			ev.unicode = ch.unicode_at(0)
+			ev.keycode = ch.to_upper().unicode_at(0) as Key
+			ev.physical_keycode = ev.keycode
+			Input.parse_input_event(ev)
+		await _frames(1)
+
+func _test_typing_and_taps() -> void:
+	print("\n== Typing over a selection and taps")
+	var edit: LineEdit = _node("LineEdit") as LineEdit
+	edit.text = "Drag the handle under the caret"
+	await _focus(edit)
+	edit.select(5, 8)
+	edit.caret_column = 8
+	await _frames(3)
+	_check(_visible_handles() == 2, "selection handles shown")
+	await _type("X")
+	_check(edit.text == "Drag X handle under the caret", "typing replaces the selected text (got '%s')" % edit.text)
+	_check(not edit.has_selection() and edit.caret_column == 6, "selection collapses with the caret after the new text")
+	await _frames(2)
+	_check(_visible_handles() == 1 and _handle(0).get_tip().distance_to(_tip_of(edit, Vector2i(6, 0))) < 1.5, "handles collapse to a single handle at the caret after typing")
+
+	# Tapping the text collapses a selection and moves the caret.
+	edit.select(2, 10)
+	await _frames(3)
+	await _click(_text_point(edit, Vector2i(15, 0)))
+	await _frames(2)
+	_check(not edit.has_selection() and edit.caret_column == 15, "tap collapses the selection and moves the caret (col %d)" % edit.caret_column)
+	_check(_visible_handles() == 1, "single handle after the tap")
+
+	# Double tap selects a word and shows both handles.
+	await _click(_text_point(edit, Vector2i(9, 0)))
+	await _click(_text_point(edit, Vector2i(9, 0)), true)
+	await _frames(3)
+	_check(edit.has_selection() and edit.get_selected_text() == "handle", "double tap selects the word (got '%s')" % edit.get_selected_text())
+	_check(_visible_handles() == 2, "two handles after a double tap")
+
+	# Same for TextEdit.
+	var text_edit: TextEdit = _node("TextEdit") as TextEdit
+	text_edit.text = "alpha beta gamma\nsecond line"
+	await _focus(text_edit)
+	text_edit.scroll_vertical = 0
+	text_edit.select(0, 6, 0, 10)
+	await _frames(3)
+	await _type("Z")
+	_check(text_edit.get_line(0) == "alpha Z gamma", "TextEdit: typing replaces the selection (got '%s')" % text_edit.get_line(0))
+	await _frames(2)
+	_check(_visible_handles() == 1, "TextEdit: single handle after typing over a selection")
+	# Which word the engine picks for an injected double-click is not reliable (TextEdit reads the
+	# viewport's stored mouse position), so only check that the handles follow whatever it selected.
+	await _click(_text_point(text_edit, Vector2i(3, 1)))
+	await _click(_text_point(text_edit, Vector2i(3, 1)), true)
+	await _frames(3)
+	_check(text_edit.has_selection(), "TextEdit: double tap selects a word")
+	_check(_visible_handles() == 2, "TextEdit: two handles after a double tap")
+	var sel_from: Vector2i = Vector2i(text_edit.get_selection_from_column(), text_edit.get_selection_from_line())
+	var sel_to: Vector2i = Vector2i(text_edit.get_selection_to_column(), text_edit.get_selection_to_line())
+	_check(_handle(0).get_tip().distance_to(_tip_of(text_edit, sel_from)) < 1.5 and _handle(1).get_tip().distance_to(_tip_of(text_edit, sel_to)) < 1.5, "TextEdit: handles sit at both ends of the double-tap selection")
+
+#endregion

@@ -25,7 +25,13 @@ Godot's built-in caret can be challenging to see and interact with on smaller sc
 * **Selection:** two handles (start/end) appear; drag either to adjust the selection. They may cross.
 * **Long-press** a word to select it.
 * Handles never take focus from the text control. Touch input must be emulated as mouse input (Godot's default `emulate_mouse_from_touch`).
-* Customize via the exported properties on the controller: `texture_caret`, `handle_size`, `handle_color`, `caret_texture_offset`, `hit_margin`, `long_press_seconds`.
+* While dragging, the handle follows your finger smoothly and the caret snaps to the nearest character.
+* The single caret handle fades out after a period of inactivity (selection handles never fade). Tapping or moving the caret brings it back.
+* Customize via the exported properties on the controller:
+  * Look: `texture_caret`, `handle_size`, `handle_color`, `caret_texture_offset`, `hit_margin`
+  * Gestures: `long_press_seconds`
+  * Fade: `caret_fade_delay` (seconds idle; `0` disables), `caret_fade_duration`
+  * Native caret: `hide_native_caret` (hide Godot's thin caret whenever a handle shows), `hide_native_caret_while_dragging` (hide it only during a drag, on by default). Any existing `caret_color` override on the control is restored exactly.
 
 ## Tests
 
