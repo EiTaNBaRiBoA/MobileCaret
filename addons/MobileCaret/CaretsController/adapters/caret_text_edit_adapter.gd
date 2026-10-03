@@ -95,14 +95,15 @@ func get_pos_at_local(local: Vector2) -> Vector2i:
 
 func get_drag_target(local: Vector2, _current: Vector2i, delta: float) -> Vector2i:
 	var edit: TextEdit = _edit()
-	if local.y < EDGE_MARGIN:
+	var margin: float = EDGE_MARGIN * ui_scale
+	if local.y < margin:
 		edit.scroll_vertical -= EDGE_SCROLL_LINES_PER_SECOND * delta
-	elif local.y > edit.size.y - EDGE_MARGIN:
+	elif local.y > edit.size.y - margin:
 		edit.scroll_vertical += EDGE_SCROLL_LINES_PER_SECOND * delta
 	# Horizontal scrolling only exists when lines are not wrapped.
 	if edit.wrap_mode == TextEdit.LINE_WRAPPING_NONE:
-		if local.x < EDGE_MARGIN:
-			edit.scroll_horizontal -= int(EDGE_SCROLL_PIXELS_PER_SECOND * delta)
-		elif local.x > edit.size.x - EDGE_MARGIN:
-			edit.scroll_horizontal += int(EDGE_SCROLL_PIXELS_PER_SECOND * delta)
+		if local.x < margin:
+			edit.scroll_horizontal -= int(EDGE_SCROLL_PIXELS_PER_SECOND * ui_scale * delta)
+		elif local.x > edit.size.x - margin:
+			edit.scroll_horizontal += int(EDGE_SCROLL_PIXELS_PER_SECOND * ui_scale * delta)
 	return get_pos_at_local(local)

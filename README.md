@@ -57,7 +57,8 @@ Select the `MobileCaret` autoload (or `carets_controller` node) and adjust its e
 | Property | Description |
 | --- | --- |
 | `texture_caret` | Optional custom handle texture. Leave empty for the default teardrop. |
-| `handle_size` | Size of a handle in pixels (also its touch area). |
+| `handle_size_mm` | Physical size of a handle in millimeters (default 7 × 8). The handle keeps this size on screen whatever the resolution, aspect ratio, stretch mode or screen DPI, and the hit margin, drag threshold and edge-scroll zones scale with it. Set to `(0, 0)` to use `handle_size` instead. |
+| `handle_size` | Size of a handle in logical pixels. Used when `handle_size_mm` is `(0, 0)`. |
 | `handle_color` | Color of the default teardrop. |
 | `caret_texture_offset` | Extra offset applied to the handles. |
 | `hit_margin` | Extra pixels around a handle that still count as touching it. |

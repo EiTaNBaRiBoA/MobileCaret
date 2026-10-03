@@ -5,6 +5,9 @@ class_name caret_text_adapter extends RefCounted
 
 # The wrapped text control.
 var control: Control
+# How much larger than the reference size the handles currently are. Pixel distances such as
+# edge-scroll zones are multiplied by it so they stay finger-sized on any screen.
+var ui_scale: float = 1.0
 
 
 func _init(text_control: Control) -> void:

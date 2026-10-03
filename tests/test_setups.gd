@@ -19,6 +19,7 @@ func _ready() -> void:
 	await _test_code_edit()
 	await _test_spin_box()
 	await _test_canvas_layer()
+	await _test_physical_handle_size()
 
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
@@ -320,5 +321,62 @@ func _test_canvas_layer() -> void:
 	await _check_text_edit_tip(text_edit, Vector2i(6, 1), "TextEdit under the layer", 1.5)
 	await _drag_handle_to(_handle(0), _tip_of(text_edit, Vector2i(9, 2)))
 	_check(text_edit.get_caret_line() == 2 and text_edit.get_caret_column() == 9, "TextEdit: dragging works under the layer transform (got %d,%d)" % [text_edit.get_caret_column(), text_edit.get_caret_line()])
+
+#endregion
+
+
+#region Physical handle size
+
+func _test_physical_handle_size() -> void:
+	print("\n== Handle size stays constant on screen")
+	await _reset()
+	var edit: LineEdit = LineEdit.new()
+	edit.position = Vector2(40.0, 40.0)
+	edit.size = Vector2(500.0, 50.0)
+	edit.text = "some text to put a caret in"
+	_root.add_child(edit)
+	await _frames(3)
+	await _focus(edit)
+	edit.caret_column = 5
+	await _frames(3)
+	var window: Window = get_window()
+	var saved_factor: float = window.content_scale_factor
+	var dpi: float = float(DisplayServer.screen_get_dpi())
+	if dpi <= 0.0:
+		dpi = 96.0
+	var expected: Vector2 = _controller.handle_size_mm * (dpi / 25.4)
+	for factor: float in [1.0, 1.5, 2.0, 0.75]:
+		window.content_scale_factor = factor
+		await _frames(4)
+		var screen_scale: float = get_viewport().get_final_transform().get_scale().x
+		var on_screen: Vector2 = _handle(0).size * screen_scale
+		# (Very small or very large results are clamped, so only check the unclamped range.)
+		var unclamped: bool = _handle(0).size.x > 16.5 and _handle(0).size.x < 399.0 and _handle(0).size.y > 16.5 and _handle(0).size.y < 399.0
+		_check(not unclamped or on_screen.distance_to(expected) < 1.5, "content scale %.2f: handle is %s px on screen (expected %s)" % [factor, str(on_screen.snapped(Vector2(0.1, 0.1))), str(expected.snapped(Vector2(0.1, 0.1)))])
+		_check(_handle(0).visible and _handle(0).get_tip().distance_to(_tip_of(edit, Vector2i(5, 0))) < 1.5, "content scale %.2f: handle still at the caret" % factor)
+	window.content_scale_factor = saved_factor
+	await _frames(3)
+
+	# Millimeters off: the plain logical size is used.
+	var saved_mm: Vector2 = _controller.handle_size_mm
+	_controller.handle_size_mm = Vector2.ZERO
+	await _frames(3)
+	_check(_handle(0).size.is_equal_approx(_controller.handle_size), "handle_size_mm = (0,0) uses handle_size in logical pixels (%s)" % str(_handle(0).size))
+	# A bigger physical size gives a bigger handle.
+	_controller.handle_size_mm = Vector2(14.0, 16.0)
+	await _frames(3)
+	var big: Vector2 = _handle(0).size
+	_controller.handle_size_mm = Vector2(7.0, 8.0)
+	await _frames(3)
+	_check(big.x > _handle(0).size.x * 1.9, "doubling handle_size_mm doubles the handle (%s vs %s)" % [str(big), str(_handle(0).size)])
+	_controller.handle_size_mm = saved_mm
+
+	# Appearance changes at runtime take effect.
+	var saved_color: Color = _controller.handle_color
+	_controller.handle_color = Color(1.0, 0.5, 0.0)
+	await _frames(3)
+	_check(_handle(0).handle_color == Color(1.0, 0.5, 0.0), "changing handle_color at runtime updates the handles")
+	_controller.handle_color = saved_color
+	await _frames(2)
 
 #endregion

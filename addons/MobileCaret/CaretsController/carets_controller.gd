@@ -13,10 +13,16 @@ class_name carets_controller extends CanvasLayer
 @export var texture_caret: Texture2D
 # Extra offset applied to the handles, in pixels.
 @export var caret_texture_offset: Vector2 = Vector2.ZERO
-# Touch size of a handle, in pixels.
+# Physical size of a handle in millimeters. The handle keeps this size on screen whatever the
+# resolution, aspect ratio, stretch mode or DPI, so it stays easy to grab. Set to (0, 0) to use
+# `handle_size` (logical pixels) instead.
+@export var handle_size_mm: Vector2 = Vector2(7.0, 8.0)
+# Size of a handle in logical pixels. Used when `handle_size_mm` is (0, 0); otherwise it is
+# only the reference that `hit_margin` is relative to.
 @export var handle_size: Vector2 = Vector2(48.0, 56.0)
 @export var handle_color: Color = Color(0.2, 0.5, 1.0)
-# Extra pixels around a handle that still count as touching it.
+# Extra pixels around a handle that still count as touching it (at `handle_size`; scaled together
+# with the handle when `handle_size_mm` is used).
 @export var hit_margin: float = 8.0
 # Seconds a press must be held (without moving) to select a word. 0 disables long-press.
 @export var long_press_seconds: float = 0.5
@@ -30,11 +36,15 @@ class_name carets_controller extends CanvasLayer
 # Seconds the fade-out/fade-in takes.
 @export var caret_fade_duration: float = 0.25
 
-# How far (in pixels) a press may move and still count as a long-press.
+# How far a press may move and still count as a long-press (at `handle_size`; scaled with the handle).
 const LONG_PRESS_TOLERANCE: float = 12.0
 
 var _root: Control
 var _handles: Array[caret_indicator] = []
+# Current handle size in logical pixels, and the factor it differs from `handle_size` by.
+# Pixel distances (hit margin, drag threshold, long-press tolerance, edge zones) scale with it.
+var _handle_logical_size: Vector2 = Vector2.ZERO
+var _ui_scale: float = 1.0
 
 var _adapter: caret_text_adapter = null
 # The handle currently being dragged, if any.
@@ -87,18 +97,20 @@ func _ready() -> void:
 		handle.name = "Handle%d" % (i + 1)
 		_root.add_child(handle)
 		_handles.append(handle)
-	_apply_appearance()
+	_update_appearance()
 
 	get_viewport().gui_focus_changed.connect(_on_focus_changed)
 	_on_focus_changed(get_viewport().gui_get_focus_owner())
 
 
 func _process(delta: float) -> void:
+	_update_appearance()
 	if _adapter == null:
 		return
 	if not _adapter.is_valid() or not _adapter.control.is_visible_in_tree() or not _adapter.control.has_focus():
 		_set_control(null)
 		return
+	_adapter.ui_scale = _ui_scale
 	_update_long_press(delta)
 	if _drag_handle != null:
 		_step_drag(delta)
@@ -111,12 +123,34 @@ func _exit_tree() -> void:
 	_set_native_caret_hidden(false)
 
 
-# Re-applies texture/size/color, e.g. after changing the exported properties at runtime.
-func _apply_appearance() -> void:
+# Handle size in logical pixels: either the configured physical size converted using the screen
+# DPI and the current stretch scale, or the plain `handle_size`.
+func _compute_handle_size() -> Vector2:
+	if handle_size_mm.x <= 0.0 or handle_size_mm.y <= 0.0:
+		return handle_size
+	var dpi: float = float(DisplayServer.screen_get_dpi())
+	if dpi <= 0.0:
+		dpi = 96.0
+	# Window pixels per logical pixel (stretch mode, aspect and content scale factor included).
+	var window_scale: float = maxf(get_viewport().get_final_transform().get_scale().x, 0.01)
+	var pixels: Vector2 = handle_size_mm * (dpi / 25.4)
+	return (pixels / window_scale).clamp(Vector2(16.0, 16.0), Vector2(400.0, 400.0))
+
+# Keeps texture, color and size of the handles in sync with the exported properties and the
+# screen, so changes at runtime (or a resized window) take effect.
+func _update_appearance() -> void:
+	var size_now: Vector2 = _compute_handle_size()
+	var stale: bool = not size_now.is_equal_approx(_handle_logical_size)
+	if not stale and not _handles.is_empty():
+		stale = _handles[0].texture != texture_caret or _handles[0].handle_color != handle_color
+	if not stale:
+		return
+	_handle_logical_size = size_now
+	_ui_scale = size_now.x / maxf(handle_size.x, 1.0)
 	for handle: caret_indicator in _handles:
 		handle.texture = texture_caret
 		handle.handle_color = handle_color
-		handle.set_handle_size(handle_size)
+		handle.set_handle_size(size_now)
 
 
 #region Focus tracking
@@ -141,6 +175,7 @@ func _set_control(new_control: Control) -> void:
 		return
 	_adapter = caret_text_adapter.for_control(new_control)
 	if _adapter != null:
+		_adapter.ui_scale = _ui_scale
 		new_control.gui_input.connect(_on_control_gui_input)
 		_update_handles()
 
@@ -248,7 +283,7 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and _drag_handle != null:
 		var motion: InputEventMouseMotion = event
 		_drag_tip = motion.position + _drag_grab_offset
-		if not _drag_moved and motion.position.distance_to(_drag_press_pointer) > DRAG_THRESHOLD:
+		if not _drag_moved and motion.position.distance_to(_drag_press_pointer) > DRAG_THRESHOLD * _ui_scale:
 			_drag_moved = true
 		get_viewport().set_input_as_handled()
 
@@ -257,7 +292,7 @@ func _handle_at(point: Vector2) -> caret_indicator:
 	var best: caret_indicator = null
 	var best_distance: float = INF
 	for handle: caret_indicator in _handles:
-		if handle.hits(point, hit_margin):
+		if handle.hits(point, hit_margin * _ui_scale):
 			var distance: float = handle.get_tip().distance_to(point)
 			if distance < best_distance:
 				best = handle
@@ -369,7 +404,7 @@ func _on_control_gui_input(event: InputEvent) -> void:
 		_long_press_fired = false
 	elif event is InputEventMouseMotion and _pressing:
 		var motion: InputEventMouseMotion = event
-		if motion.position.distance_to(_press_position) > LONG_PRESS_TOLERANCE:
+		if motion.position.distance_to(_press_position) > LONG_PRESS_TOLERANCE * _ui_scale:
 			_pressing = false
 
 func _update_long_press(delta: float) -> void:

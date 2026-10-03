@@ -120,11 +120,15 @@ func _mouse_button(logical_pos: Vector2, pressed: bool, double_click: bool = fal
 	Input.parse_input_event(ev)
 
 func _click(pos: Vector2, double_click: bool = false) -> void:
+	# A finger-sized handle can cover the text next to it (as on Android), so the layer with the
+	# handles is hidden during these clicks: they exercise the text control, not the handles.
+	_controller.visible = false
 	_mouse_move(pos)
 	_mouse_button(pos, true, double_click)
 	await _frames(1)
 	_mouse_button(pos, false)
 	await _frames(1)
+	_controller.visible = true
 
 # Presses a handle, drags its tip to `target_tip` (viewport space) and releases.
 func _drag_handle_to(handle: caret_indicator, target_tip: Vector2, hold_frames: int = 3) -> void:

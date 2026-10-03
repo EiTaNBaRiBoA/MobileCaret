@@ -36,8 +36,9 @@ func _init() -> void:
 
 # Sizes the handle; the tip stays at the top-center.
 func set_handle_size(handle_size: Vector2) -> void:
-	size = handle_size
+	# The minimum size goes first: a Control's size can't be set below its current minimum.
 	custom_minimum_size = handle_size
+	size = handle_size
 	queue_redraw()
 
 # Moves the handle so its tip is at `tip` (viewport space).
@@ -50,7 +51,10 @@ func get_tip() -> Vector2:
 # Whether a viewport-space point hits the handle, with `margin` extra pixels around it.
 func hits(point: Vector2, margin: float) -> bool:
 	# A (nearly) faded-out handle can no longer be grabbed.
-	return visible and modulate.a > 0.1 and Rect2(global_position, size).grow(margin).has_point(point)
+	# The margin never extends above the tip, so taps on the text line next to the caret still
+	# reach the text control.
+	var area: Rect2 = Rect2(global_position, size).grow_individual(margin, 0.0, margin, margin)
+	return is_visible_in_tree() and modulate.a > 0.1 and area.has_point(point)
 
 
 func _draw() -> void:
