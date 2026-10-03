@@ -20,6 +20,8 @@ func _ready() -> void:
 	_example = (load(EXAMPLE_SCENE) as PackedScene).instantiate()
 	add_child(_example)
 	await _frames(3)
+
+	await _test_line_edit_geometry()
 	await _test_line_edit_caret_drag()
 	await _test_line_edit_selection()
 	await _test_line_edit_edge_scroll()
@@ -31,6 +33,7 @@ func _ready() -> void:
 	await _test_drag_precision()
 	await _test_native_caret_hiding()
 	await _test_caret_fade()
+	await _test_edge_scroll_steadiness()
 	await _test_typing_and_taps()
 	await _test_focus_changes()
 
@@ -180,8 +183,11 @@ func _test_line_edit_caret_drag() -> void:
 	_check(_handle(0).get_tip().distance_to(expected_tip) < 1.5, "handle tip at caret (%s vs %s)" % [str(_handle(0).get_tip()), str(expected_tip)])
 	await _screenshot("lineedit_caret")
 
+	var pre_alpha: float = _handle(0).modulate.a
+	var pre_tip: Vector2 = _handle(0).get_tip()
+	var pre_vis: bool = _handle(0).visible
 	await _drag_handle_to(_handle(0), _tip_of(edit, Vector2i(15, 0)))
-	_check(edit.caret_column == 15, "dragging handle moves caret to col 15 (got %d)" % edit.caret_column)
+	_check(edit.caret_column == 15, "dragging handle moves caret to col 15 (got %d; before: alpha %.2f visible %s tip %s idle %.2f scroll %s)" % [edit.caret_column, pre_alpha, pre_vis, str(pre_tip), _controller._idle_time, str(edit.get_scroll_offset())])
 	_check(not edit.has_selection(), "dragging the single handle does not select")
 	_check(edit.has_focus(), "LineEdit keeps focus while handle is dragged")
 	_check(_handle(0).visible and not _handle(1).visible, "still one handle after drag")
@@ -662,3 +668,74 @@ func _test_typing_and_taps() -> void:
 	_check(_handle(0).get_tip().distance_to(_tip_of(text_edit, sel_from)) < 1.5 and _handle(1).get_tip().distance_to(_tip_of(text_edit, sel_to)) < 1.5, "TextEdit: handles sit at both ends of the double-tap selection")
 
 #endregion
+
+
+# Dragging a handle past the top/bottom edge must scroll smoothly: the dragged handle stays
+# visible and steady, and the caret/scroll position only ever moves in one direction.
+func _test_edge_scroll_steadiness() -> void:
+	print("\n== Edge scroll steadiness")
+	var edit: TextEdit = _node("TextEdit") as TextEdit
+	var lines: PackedStringArray = []
+	for i: int in 40:
+		lines.append("Line number %d with some text" % i)
+	edit.text = "\n".join(lines)
+	await _focus(edit)
+	var rect: Rect2 = edit.get_global_rect()
+	# [direction, with_selection]
+	for case: Array in [[1, false], [-1, false], [1, true], [-1, true]]:
+		var direction: int = case[0]
+		var with_selection: bool = case[1]
+		edit.deselect()
+		if direction == 1:
+			edit.scroll_vertical = 0
+			edit.set_caret_line(0)
+			edit.set_caret_column(2)
+			if with_selection:
+				edit.select(0, 2, 2, 6)
+		else:
+			edit.scroll_vertical = 20
+			edit.set_caret_line(24)
+			edit.set_caret_column(2)
+			if with_selection:
+				edit.select(23, 2, 24, 6)
+		await _frames(4)
+		# With a selection the end handle is the one past the anchor.
+		var handle: caret_indicator = _handle(0)
+		if with_selection:
+			handle = _handle(1) if direction == 1 else _handle(0)
+		var label: String = "%s%s" % ["down" if direction == 1 else "up", " (selection)" if with_selection else ""]
+		_check(handle.visible, "scrolling %s: handle visible before the drag" % label)
+		var start: Vector2 = handle.global_position + handle.size * 0.5
+		_mouse_move(start)
+		_mouse_button(start, true)
+		await _frames(1)
+		var far: Vector2 = Vector2(start.x, rect.end.y + 60.0) if direction == 1 else Vector2(start.x, rect.position.y - 60.0)
+		_mouse_move(far)
+		var hidden_frames: int = 0
+		var min_y: float = INF
+		var max_y: float = -INF
+		var start_scroll: float = edit.scroll_vertical
+		var reversals: int = 0
+		var last_scroll: float = start_scroll
+		var last_line: int = edit.get_caret_line()
+		for i: int in 50:
+			await _frames(1)
+			if not handle.visible:
+				hidden_frames += 1
+			if i > 5:
+				min_y = minf(min_y, handle.get_tip().y)
+				max_y = maxf(max_y, handle.get_tip().y)
+			if (edit.scroll_vertical - last_scroll) * direction < -0.001 or (edit.get_caret_line() - last_line) * direction < 0:
+				reversals += 1
+			last_scroll = edit.scroll_vertical
+			last_line = edit.get_caret_line()
+		_check(hidden_frames == 0, "scrolling %s: dragged handle never disappears (%d hidden frames)" % [label, hidden_frames])
+		_check(max_y - min_y < 1.5, "scrolling %s: dragged handle is steady at the edge (y range %.1f)" % [label, max_y - min_y])
+		_check(reversals == 0, "scrolling %s: scroll and caret only move one way (%d reversals)" % [label, reversals])
+		_check(handle.get_tip().y <= rect.end.y + 0.5 and handle.get_tip().y >= rect.position.y, "scrolling %s: handle stays inside the control" % label)
+		_check(absf(edit.scroll_vertical - start_scroll) > 2.0, "scrolling %s: the text actually scrolls" % label)
+		_mouse_button(far, false)
+		await _frames(3)
+	edit.text = "The quick brown fox jumps over the lazy dog.\nSecond line of the wrapped text edit, long enough that it needs to wrap around the edge.\nThird line.\nFourth line.\nFifth line."
+	edit.scroll_vertical = 0
+	await _frames(2)

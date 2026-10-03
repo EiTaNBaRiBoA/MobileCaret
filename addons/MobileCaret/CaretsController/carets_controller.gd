@@ -157,10 +157,10 @@ func _update_handles() -> void:
 		if _drag_has_anchor:
 			var dragged_style: caret_indicator.Style = caret_indicator.Style.LEFT if _is_before(caret, _drag_anchor) else caret_indicator.Style.RIGHT
 			var other_style: caret_indicator.Style = caret_indicator.Style.RIGHT if dragged_style == caret_indicator.Style.LEFT else caret_indicator.Style.LEFT
-			_place(_drag_handle, caret, dragged_style, _smooth_drag_x())
+			_place(_drag_handle, caret, dragged_style, true)
 			_place(other, _drag_anchor, other_style)
 		else:
-			_place(_drag_handle, caret, caret_indicator.Style.CARET, _smooth_drag_x())
+			_place(_drag_handle, caret, caret_indicator.Style.CARET, true)
 			other.hide()
 	elif _adapter.has_selection():
 		_mark_active()
@@ -173,26 +173,28 @@ func _update_handles() -> void:
 		second.hide()
 
 # Positions a handle at a text position, hiding it if that position is scrolled out of view.
-# `smooth_x` (viewport space, NaN for none) lets a dragged handle follow the finger
-# horizontally while the caret itself snaps to characters, like Android.
-func _place(handle: caret_indicator, pos: Vector2i, handle_style: caret_indicator.Style, smooth_x: float = NAN) -> void:
-	if not _adapter.is_pos_visible(pos):
+# A dragged handle (`dragging`) is never hidden: it follows the finger horizontally while the
+# caret itself snaps to characters (like Android), and it stays inside the control vertically,
+# following the finger while the caret row is scrolled or clipped at an edge.
+func _place(handle: caret_indicator, pos: Vector2i, handle_style: caret_indicator.Style, dragging: bool = false) -> void:
+	var pos_visible: bool = _adapter.is_pos_visible(pos)
+	if not pos_visible and not dragging:
 		handle.hide()
 		return
 	handle.style = handle_style
-	# Text-control space -> viewport space (same space as the handle layer).
-	var tip: Vector2 = _adapter.control.get_global_transform_with_canvas() * _adapter.get_tip_local(pos)
-	tip += caret_texture_offset
-	if not is_nan(smooth_x):
-		tip.x = smooth_x
+	var tip: Vector2 = _drag_tip
+	if pos_visible:
+		# Text-control space -> viewport space (same space as the handle layer).
+		tip = _adapter.control.get_global_transform_with_canvas() * _adapter.get_tip_local(pos)
+		tip += caret_texture_offset
+	if dragging:
+		var bounds: Rect2 = _adapter.control.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, _adapter.control.size)
+		tip.x = clampf(_drag_tip.x, bounds.position.x, bounds.end.x)
+		tip.y = clampf(tip.y, bounds.position.y + _adapter.get_line_height(), bounds.end.y)
 	handle.set_tip(tip)
 	handle.modulate.a = _caret_alpha if handle_style == caret_indicator.Style.CARET else 1.0
 	handle.show()
 
-# Horizontal position of the dragged handle: the finger's x, kept inside the control.
-func _smooth_drag_x() -> float:
-	var bounds: Rect2 = _adapter.control.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, _adapter.control.size)
-	return clampf(_drag_tip.x, bounds.position.x, bounds.end.x)
 
 static func _is_before(a: Vector2i, b: Vector2i) -> bool:
 	return a.y < b.y or (a.y == b.y and a.x < b.x)
