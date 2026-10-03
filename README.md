@@ -1,47 +1,93 @@
-# Mobile Caret for Godot 4 (WIP)
+# Mobile Caret for Godot 4
 
-Godot 4 plugin for customizable, touch-friendly carets on mobile devices. Improves text input visibility and selection ease.
+Touch-friendly text carets and selection handles for Godot 4, in the style of Android. Drop it into your project and every `LineEdit` and `TextEdit` gets draggable handles, with no per-scene setup.
 
 ## Motivation
 
-Godot's built-in caret can be challenging to see and interact with on smaller screens, particularly on mobile devices. This plugin aims to address that by providing a customizable solution for a more user-friendly caret experience.
+Godot's built-in caret is a thin line that is hard to see and almost impossible to place precisely with a finger. This plugin adds large, easy-to-grab handles so editing text on a phone feels natural.
+
+## Screenshots
+
+A caret handle under the caret in a `LineEdit`. Drag it to move the caret:
+
+![Caret handle in a LineEdit](docs/images/caret_handle.png)
+
+Two handles around a selection in a `LineEdit`:
+
+![Selection handles in a LineEdit](docs/images/selection_line_edit.png)
+
+A selection spanning several lines of a wrapped `TextEdit`:
+
+![Selection handles in a TextEdit](docs/images/selection_text_edit.png)
 
 ## Features
 
-* **Custom Caret:** Use any `TextureButton` as your text caret, providing greater visibility and touch target area.
-* **Offset Control:** Fine-tune the position of the custom caret relative to the text for optimal placement.
-* **Text Selection Support:** The plugin seamlessly handles text selection, allowing you to drag the custom caret to adjust the selection range.
-* **Theme Compatibility:** Works with various themes and font sizes, ensuring visual consistency.
+* **Draggable caret handle:** a handle appears under the caret; drag it to move the caret.
+* **Selection handles:** when text is selected, two handles mark the start and end. Drag either one to adjust the selection, and they can cross over each other.
+* **Long-press to select a word.**
+* **Smooth dragging:** the handle follows your finger while the caret snaps to the nearest character. Dragging past the edge of a control scrolls it.
+* **Auto-fading caret handle:** the single caret handle fades out after a few seconds of inactivity and returns when you tap or move the caret. Selection handles stay visible.
+* **Native caret hiding:** optionally hide Godot's own thin caret while a handle is shown, or only while dragging.
+* **Works with what you already have:** supports `LineEdit` and `TextEdit` (including wrapped text, scrolling, alignment, secret fields and different font sizes) without changing your scenes. The text control keeps focus, so the on-screen keyboard stays up while you drag.
+* **Customizable:** use your own handle texture, size and color.
 
 ## Installation
 
-1. Copy `addons/MobileCaret` into your project's `addons/` folder.
-2. Enable **MobileCaret** in *Project Settings > Plugins*. This registers the `MobileCaret` autoload (or add `CaretsController/carets_controller.tscn` as an autoload yourself).
+1. Download the repository (or use the Asset Library) and copy `addons/MobileCaret` into your project's `addons/` folder.
+2. Open *Project Settings > Plugins* and enable **MobileCaret**. This registers a `MobileCaret` autoload.
+
+That's it. Run your project and focus any `LineEdit` or `TextEdit`.
+
+If you prefer not to use the plugin, add `addons/MobileCaret/CaretsController/carets_controller.tscn` as an autoload yourself.
+
+An example scene is included at `addons/MobileCaret/Examples/example_scene.tscn`.
 
 ## Usage
 
-* The controller watches GUI focus: whenever a `LineEdit` or `TextEdit` is focused, a handle appears under its caret.
-* **No selection:** drag the handle to move the caret.
-* **Selection:** two handles (start/end) appear; drag either to adjust the selection. They may cross.
-* **Long-press** a word to select it.
-* Handles never take focus from the text control. Touch input must be emulated as mouse input (Godot's default `emulate_mouse_from_touch`).
-* While dragging, the handle follows your finger smoothly and the caret snaps to the nearest character.
-* The single caret handle fades out after a period of inactivity (selection handles never fade). Tapping or moving the caret brings it back.
-* Customize via the exported properties on the controller:
-  * Look: `texture_caret`, `handle_size`, `handle_color`, `caret_texture_offset`, `hit_margin`
-  * Gestures: `long_press_seconds`
-  * Fade: `caret_fade_delay` (seconds idle; `0` disables), `caret_fade_duration`
-  * Native caret: `hide_native_caret` (hide Godot's thin caret whenever a handle shows), `hide_native_caret_while_dragging` (hide it only during a drag, on by default). Any existing `caret_color` override on the control is restored exactly.
+* **Move the caret:** drag the handle under the caret.
+* **Select text:** long-press a word (or double-tap). Two handles appear; drag them to adjust the selection.
+* **Replace or collapse a selection:** just type, or tap elsewhere, as usual.
 
-## Tests
+### Settings
 
-```
-godot --path <project> res://MobileCaret/tests/test_carets.tscn
-```
+Select the `MobileCaret` autoload (or `carets_controller` node) and adjust its exported properties, or set them from code, for example `MobileCaret.handle_color = Color.ORANGE`.
 
-Drives real input events against the example scene (exit code 0 = all pass).
+#### Look
 
-## Important Notes
+| Property | Description |
+| --- | --- |
+| `texture_caret` | Optional custom handle texture. Leave empty for the default teardrop. |
+| `handle_size` | Size of a handle in pixels (also its touch area). |
+| `handle_color` | Color of the default teardrop. |
+| `caret_texture_offset` | Extra offset applied to the handles. |
+| `hit_margin` | Extra pixels around a handle that still count as touching it. |
 
-* **Work in Progress:** This plugin is actively being developed. There might be some edge cases or bugs that need to be addressed.
-* **Feedback and Contributions:** Your feedback and contributions are highly valued! This plugin is a work in progress, pull requests are always welcome!
+#### Gestures
+
+| Property | Description |
+| --- | --- |
+| `long_press_seconds` | How long to press to select a word. `0` disables long-press. |
+
+#### Fade
+
+| Property | Description |
+| --- | --- |
+| `caret_fade_delay` | Seconds of inactivity before the caret handle fades out. `0` or less disables fading. |
+| `caret_fade_duration` | How long the fade takes, in seconds. |
+
+#### Native caret
+
+| Property | Description |
+| --- | --- |
+| `hide_native_caret` | Hide Godot's thin caret whenever a handle is shown. |
+| `hide_native_caret_while_dragging` | Hide it only while a handle is being dragged (on by default). |
+
+If a control already has its own `caret_color` override, it is restored exactly when the native caret is shown again.
+
+## Feedback and Contributions
+
+Bug reports, ideas and pull requests are welcome.
+
+## License
+
+Released under the MIT License. See [LICENSE](LICENSE).
