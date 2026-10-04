@@ -1,0 +1,7 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://MobileCaret/addons/MobileCaret/Toolbar/caret_toolbar.gd" id="1_toolbar"]
+
+[node name="caret_toolbar" type="CanvasLayer"]
+layer = 129
+script = ExtResource("1_toolbar")

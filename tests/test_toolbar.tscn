@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://MobileCaret/tests/test_toolbar.gd" id="1"]
+
+[node name="TestToolbar" type="Node"]
+script = ExtResource("1")
