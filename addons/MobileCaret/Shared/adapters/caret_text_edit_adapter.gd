@@ -104,6 +104,11 @@ func is_pos_visible(pos: Vector2i) -> bool:
 func _caret_top_left(pos: Vector2i) -> Vector2:
 	var edit: TextEdit = _edit()
 	var line_length: int = edit.get_line(pos.y).length()
+	# A completely empty text has no rows to measure (the engine reports a zero rect), so the
+	# caret sits where the first row would start.
+	if line_length == 0 and edit.get_line_count() == 1:
+		var style: StyleBox = edit.get_theme_stylebox("normal" if edit.editable else "read_only")
+		return Vector2(_text_origin_x(0.0), style.get_margin(SIDE_TOP))
 	var rect: Rect2i = edit.get_rect_at_line_column(pos.y, pos.x)
 	if rect.position.x < 0 or rect.position.y < 0:
 		return Vector2(-1.0, -1.0)

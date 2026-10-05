@@ -27,6 +27,7 @@ func _ready() -> void:
 	await _test_overflow_menu()
 	await _test_tap_on_selection()
 	await _test_rich_text_label()
+	await _test_empty_field()
 	await _test_review_fixes()
 	await _test_physical_size()
 	await _test_without_carets_controller()
@@ -682,3 +683,22 @@ func _test_review_fixes() -> void:
 	await _wait_toolbar(true)
 	_check(_toolbar.is_showing(), "and comes back when it scrolls into view")
 
+
+
+# Tapping the handle in an empty field offers Paste.
+func _test_empty_field() -> void:
+	print("\n== Empty field")
+	await _reset()
+	var edit: LineEdit = _line_edit("", Vector2(40.0, 300.0))
+	edit.placeholder_text = "Write text here..."
+	await _frames(2)
+	await _focus(edit)
+	await _frames(3)
+	var handle: caret_indicator = _controller.get_node("Handles").get_child(0) as caret_indicator
+	_check(handle.visible, "the caret handle shows in an empty field")
+	_check(not _toolbar.is_showing(), "no toolbar until the handle is tapped")
+	await _click(handle.global_position + handle.size * 0.5)
+	await _wait_toolbar(true)
+	_check(_toolbar.is_showing() and _buttons_are([&"paste", &"more"]), "tapping the handle offers Paste (no Select all on empty text; got %s)" % str(_button_ids()))
+	await _press_button(&"paste")
+	_check(edit.text == "clip", "Paste fills the field (text '%s')" % edit.text)

@@ -19,6 +19,7 @@ func _ready() -> void:
 	if toolbar != null:
 		toolbar.set("enabled", false)
 	await _frames(2)
+	await _test_empty_text()
 	await _test_line_edit_caret_positions()
 	await _test_line_edit_clicks()
 	await _test_line_edit_drag()
@@ -433,3 +434,77 @@ func _test_text_edit_handles() -> void:
 	_check(edit.get_selection_from_line() == 0 and edit.get_selection_from_column() == 2 and edit.get_selection_to_line() == 1 and edit.get_selection_to_column() == 5, "dragging the end handle extends across lines to (2,0)..(5,1) (got (%d,%d)..(%d,%d))" % [edit.get_selection_from_column(), edit.get_selection_from_line(), edit.get_selection_to_column(), edit.get_selection_to_line()])
 
 #endregion
+
+
+# An empty field still shows the caret handle, at the spot where the caret is drawn.
+func _test_empty_text() -> void:
+	print("\n== Empty text")
+	await _reset()
+	var edit: LineEdit = _red_line_edit(Vector2(20.0, 100.0))
+	edit.placeholder_text = "Write text here..."
+	await _frames(2)
+	edit.grab_focus()
+	await _frames(4)
+	var handle: caret_indicator = _handle(0)
+	for layout: int in [Control.LAYOUT_DIRECTION_LTR, Control.LAYOUT_DIRECTION_RTL]:
+		for alignment: int in [HORIZONTAL_ALIGNMENT_LEFT, HORIZONTAL_ALIGNMENT_CENTER, HORIZONTAL_ALIGNMENT_RIGHT]:
+			edit.layout_direction = layout as Control.LayoutDirection
+			edit.alignment = alignment as HorizontalAlignment
+			edit.text = ""
+			edit.caret_column = 0
+			await _frames(4)
+			var expected: Vector2 = _tip_of(edit, Vector2i.ZERO)
+			var label: String = "LineEdit layout %s align %d" % ["RTL" if layout == Control.LAYOUT_DIRECTION_RTL else "LTR", alignment]
+			_check(handle.visible and handle.get_tip().distance_to(expected) < 1.5, "%s: the handle shows on empty text at the caret" % label)
+			var real: Array[float] = await _red_caret_xs(edit)
+			if not real.is_empty():
+				var nearest: float = INF
+				for x: float in real:
+					nearest = minf(nearest, absf(x - expected.x))
+				_check(nearest <= maxf(2.0, 1.5 / get_viewport().get_final_transform().get_scale().x), "%s: that is where the real caret is drawn (%.1f vs %s)" % [label, expected.x, str(real)])
+	edit.layout_direction = Control.LAYOUT_DIRECTION_LTR
+	edit.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	# Dragging the handle on empty text does nothing harmful.
+	edit.text = ""
+	edit.caret_column = 0
+	await _frames(4)
+	var start: Vector2 = handle.global_position + handle.size * 0.5
+	_mouse_move(start)
+	_mouse_button(start, true)
+	await _frames(1)
+	for i: int in range(1, 6):
+		_mouse_move(start + Vector2(float(i) * 30.0, 0.0))
+		await _frames(1)
+	_mouse_button(start + Vector2(150.0, 0.0), false)
+	await _frames(3)
+	_check(edit.caret_column == 0 and edit.text.is_empty() and edit.has_focus() and handle.visible, "dragging the handle on empty text keeps the caret at 0 and the handle visible")
+	# Typing makes it behave as usual, and deleting it all brings it back.
+	edit.text = "abc"
+	edit.caret_column = 3
+	await _frames(4)
+	_check(handle.visible and handle.get_tip().distance_to(_tip_of(edit, Vector2i(3, 0))) < 1.5, "with text the handle follows the caret")
+	edit.text = ""
+	await _frames(4)
+	_check(handle.visible and handle.get_tip().distance_to(_tip_of(edit, Vector2i.ZERO)) < 1.5, "after deleting all text the handle is still there")
+
+	# TextEdit, wrapped and not, with a placeholder.
+	for wrap: int in [TextEdit.LINE_WRAPPING_BOUNDARY, TextEdit.LINE_WRAPPING_NONE]:
+		var text_edit: TextEdit = TextEdit.new()
+		text_edit.position = Vector2(20.0, 300.0)
+		text_edit.size = Vector2(500.0, 160.0)
+		text_edit.add_theme_font_size_override("font_size", 26)
+		text_edit.placeholder_text = "Write text here..."
+		text_edit.wrap_mode = wrap as TextEdit.LineWrappingMode
+		_root.add_child(text_edit)
+		await _frames(3)
+		text_edit.grab_focus()
+		await _frames(4)
+		var native: Vector2 = Vector2(text_edit.get_caret_draw_pos())
+		var tip: Vector2 = caret_text_adapter.for_control(text_edit).get_tip_local(Vector2i.ZERO)
+		var text_handle: caret_indicator = _handle(0)
+		var line_height: float = float(text_edit.get_line_height())
+		_check(text_handle.visible, "TextEdit (wrap %d): the handle shows on empty text" % wrap)
+		_check(absf(tip.x - native.x) <= 2.0 and tip.y >= native.y and tip.y <= native.y + line_height + 2.0, "TextEdit (wrap %d): it sits at the caret (tip %s, native %s)" % [wrap, str(tip), str(native)])
+		_check(text_handle.get_tip().distance_to(_tip_of(text_edit, Vector2i.ZERO)) < 1.5, "TextEdit (wrap %d): the handle is placed at that tip" % wrap)
+		text_edit.queue_free()
+		await _frames(2)

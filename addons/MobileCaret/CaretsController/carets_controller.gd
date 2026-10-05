@@ -297,10 +297,9 @@ func _update_handles() -> void:
 			var first_style: caret_indicator.Style = _style_for(from, to)
 			_place(first, from, first_style)
 			_place(second, to, _opposite(first_style))
-		elif _adapter.is_empty():
-			first.hide()
-			second.hide()
 		else:
+			# Also for empty text: a tap in an empty field still shows the caret handle (and,
+			# with the toolbar, Paste).
 			_place(first, _adapter.get_caret(caret_index), caret_indicator.Style.CARET)
 			second.hide()
 
