@@ -78,6 +78,15 @@ Select the `MobileCaret` autoload (or `carets_controller` node) and adjust its e
 | Property | Description |
 | --- | --- |
 | `long_press_seconds` | How long to press to select a word. `0` disables long-press. |
+| `release_focus_on_tap_outside` | Tapping outside the focused text control (the background, a label, empty space) takes the focus away, like Android: the caret, the selection and the handles go away (default on). Godot itself keeps the focus on such taps. Taps on buttons, the toolbar, the handles, controls that take the focus themselves, and controls marked with the `mobile_caret_keep_focus` meta (and everything inside them) keep it. A drag, such as scrolling, never releases it. |
+
+To keep the focus when a tap lands on a panel of your own (an on-screen keypad, say), mark it:
+
+```gdscript
+my_keypad.set_meta(&"mobile_caret_keep_focus", true)
+```
+
+An overlay drawn outside the GUI (like the toolbar) can join the `mobile_caret_overlay` group and implement `covers_point(point: Vector2, viewport: Viewport) -> bool`.
 
 #### Fade
 

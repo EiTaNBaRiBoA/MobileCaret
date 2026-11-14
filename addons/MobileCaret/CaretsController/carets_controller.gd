@@ -42,6 +42,12 @@ signal handle_tapped(control: Control)
 @export var caret_fade_delay: float = 4.0
 # Seconds the fade-out/fade-in takes.
 @export var caret_fade_duration: float = 0.25
+# Tapping outside the focused text control (on the background, a label, a panel...) takes the
+# focus away from it, like Android: its caret and selection go away. Godot itself keeps the focus
+# on such taps. Taps on buttons (they keep the keyboard up), on controls that take the focus
+# themselves, on the toolbar, and on controls with the "mobile_caret_keep_focus" meta (or inside
+# one) keep it. A drag (scrolling) never releases it.
+@export var release_focus_on_tap_outside: bool = true
 
 # How far a press may move and still count as a long-press (at `handle_size`; scaled with the handle).
 const LONG_PRESS_TOLERANCE: float = 12.0
@@ -51,6 +57,13 @@ const DRAG_THRESHOLD: float = 6.0
 # Longest frame time used for edge-scrolling, so one slow frame can't make the caret leap.
 const MAX_DRAG_DELTA: float = 0.05
 const HANDLES_LAYER_NAME: String = "MobileCaretHandles"
+# Set this meta on a control (any value) to let taps on it, or inside it, keep the text focus.
+const KEEP_FOCUS_META: StringName = &"mobile_caret_keep_focus"
+# Nodes in this group that cover a point (method covers_point(point, viewport) -> bool), like the
+# toolbar, keep the text focus too.
+const OVERLAY_GROUP: StringName = &"mobile_caret_overlay"
+# A press that moves more than this (in millimeters) is a drag, not a tap.
+const TAP_MOVE_MM: float = 2.0
 
 
 # The handles of one viewport. The main window's overlay is this node itself; other viewports
@@ -83,6 +96,9 @@ var _drag_moved: bool = false
 var _drag_grab_offset: Vector2 = Vector2.ZERO
 
 var _pressing: bool = false
+# A press outside the focused control that may release its focus when it ends as a tap.
+var _outside_press: bool = false
+var _outside_press_position: Vector2 = Vector2.ZERO
 var _press_position: Vector2 = Vector2.ZERO
 var _press_time: float = 0.0
 var _long_press_fired: bool = false
@@ -378,18 +394,81 @@ func _handle_input(event: InputEvent, event_viewport: Viewport) -> void:
 			return
 		if button.pressed:
 			var handle: caret_indicator = _handle_at(button.position)
+			_outside_press = false
 			if handle != null:
 				_begin_drag(handle, button.position)
 				event_viewport.set_input_as_handled()
+			elif release_focus_on_tap_outside and not _over_control(_adapter.control, button.position) and not _over_overlay(button.position, event_viewport) and not _over_any_handle(button.position):
+				_outside_press = true
+				_outside_press_position = button.position
 		elif _drag_handle != null:
 			_end_drag()
 			event_viewport.set_input_as_handled()
+		elif _outside_press:
+			_outside_press = false
+			if button.position.distance_to(_outside_press_position) <= caret_screen.mm_to_logical(event_viewport, TAP_MOVE_MM):
+				# After the GUI has handled the tap: a control that takes the focus has it by then.
+				_release_after_outside_tap.call_deferred(_adapter.control, event_viewport, button.position)
+	elif event is InputEventMouseMotion and _outside_press:
+		if (event as InputEventMouseMotion).position.distance_to(_outside_press_position) > caret_screen.mm_to_logical(event_viewport, TAP_MOVE_MM):
+			_outside_press = false
 	elif event is InputEventMouseMotion and _drag_handle != null:
 		var motion: InputEventMouseMotion = event
 		_drag_tip = motion.position + _drag_grab_offset
 		if not _drag_moved and motion.position.distance_to(_drag_press_pointer) > DRAG_THRESHOLD * _active.ui_scale:
 			_drag_moved = true
 		event_viewport.set_input_as_handled()
+
+#region Tap outside
+
+# Whether a viewport-space point is over a control (its rectangle).
+static func _over_control(control: Control, point: Vector2) -> bool:
+	var local: Vector2 = control.get_global_transform_with_canvas().affine_inverse() * point
+	return Rect2(Vector2.ZERO, control.size).has_point(local)
+
+# A shown handle counts as part of the field, even while it is faded out.
+func _over_any_handle(point: Vector2) -> bool:
+	var margin: float = hit_margin * _active.ui_scale
+	for handle: caret_indicator in _active.handles:
+		# Not hits(): that one ignores faded handles.
+		if handle.is_visible_in_tree() and Rect2(handle.global_position, handle.size).grow(margin).has_point(point):
+			return true
+	return false
+
+func _over_overlay(point: Vector2, viewport: Viewport) -> bool:
+	for node: Node in get_tree().get_nodes_in_group(OVERLAY_GROUP):
+		if node.has_method(&"covers_point") and bool(node.call(&"covers_point", point, viewport)):
+			return true
+	return false
+
+func _release_after_outside_tap(control: Control, viewport: Viewport, point: Vector2) -> void:
+	if not is_instance_valid(control) or not control.has_focus() or control.get_viewport() != viewport:
+		return
+	if _keeps_focus(viewport, viewport, point, control):
+		return
+	control.release_focus()
+
+# Whether something under the point should keep the text focus: the focused control or a part of
+# it, a button, or a control with the keep-focus meta. All controls under the point count (not just
+# the top one), so a tap only releases the focus when nothing there wants to keep it.
+func _keeps_focus(node: Node, viewport: Viewport, point: Vector2, focused: Control) -> bool:
+	for child: Node in node.get_children(true):
+		if child is Viewport:
+			continue
+		if child is CanvasItem and not (child as CanvasItem).visible:
+			continue
+		if child is Control:
+			var control: Control = child
+			if _over_control(control, point):
+				if control == focused or focused.is_ancestor_of(control) or control.has_meta(KEEP_FOCUS_META):
+					return true
+				if control is BaseButton and control.mouse_filter != Control.MOUSE_FILTER_IGNORE:
+					return true
+		if _keeps_focus(child, viewport, point, focused):
+			return true
+	return false
+
+#endregion
 
 # The visible handle under a viewport-space point (the closest one if several overlap).
 func _handle_at(point: Vector2) -> caret_indicator:

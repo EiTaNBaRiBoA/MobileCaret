@@ -142,6 +142,8 @@ var _submenu: StringName = &""
 
 func _ready() -> void:
 	layer = 129
+	# Taps on the toolbar keep the text control's focus (see the carets controller).
+	add_to_group(&"mobile_caret_overlay")
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_panel = _make_panel()
 	add_child(_panel)
@@ -264,6 +266,16 @@ func get_button_rect(action: StringName) -> Rect2:
 		if item["id"] == action:
 			return _panel.get_global_transform() * (item["rect"] as Rect2)
 	return Rect2()
+
+# Whether the toolbar is shown over a viewport-space point of `viewport`.
+func covers_point(point: Vector2, viewport: Viewport) -> bool:
+	var found: Variant = _panels.get(viewport.get_instance_id())
+	if not is_instance_valid(found):
+		return false
+	var panel: caret_toolbar_panel = found as caret_toolbar_panel
+	if panel == null or not panel.visible:
+		return false
+	return (panel.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, panel.size)).has_point(point)
 
 # Rectangle (viewport space) of the whole toolbar, or an empty Rect2 if hidden.
 func get_toolbar_rect() -> Rect2:

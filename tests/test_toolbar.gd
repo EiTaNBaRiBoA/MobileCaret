@@ -348,7 +348,10 @@ func _test_switches() -> void:
 	_mouse_button(away, true)
 	await _frames(3)
 	_check(not _toolbar.is_showing(), "hidden while a mouse button is held down")
-	_mouse_button(away, false)
+	# Released after a drag: a plain tap out here would take the focus away (release_focus_on_tap_outside).
+	_mouse_move(away + Vector2(0.0, -60.0))
+	await _frames(1)
+	_mouse_button(away + Vector2(0.0, -60.0), false)
 	await _wait_toolbar(true)
 
 	# Individual buttons can be turned off.
