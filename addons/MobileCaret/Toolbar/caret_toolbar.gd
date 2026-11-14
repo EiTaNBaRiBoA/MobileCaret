@@ -230,7 +230,7 @@ func is_showing() -> bool:
 #  * `children`: Dictionaries of the same kind ({"id", "text", "callback", "items", ...}); the
 #    button then opens them as a submenu with a ‹ button to go back.
 #  * `when`: "always", "selection" (only with a selection) or "caret" (only without one).
-#  * `font` / `icon`: an optional Font for the label (a math font, say) and a Texture2D icon.
+#  * `font` / `icon`: an optional Font for the label and a Texture2D icon.
 # Adding an id again replaces the old item.
 func add_item(id: StringName, text: String, index: int = -1, callback: Callable = Callable(), children: Array = [], when: String = "always", font: Font = null, icon: Texture2D = null) -> void:
 	add_item_spec({"id": id, "text": text, "index": index, "callback": callback, "items": children, "when": when, "font": font, "icon": icon})

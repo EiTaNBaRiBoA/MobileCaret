@@ -4,7 +4,7 @@
 class_name caret_toolbar_panel extends Control
 
 # Entries: { "id": StringName, "text": String, "rect": Rect2 } with rects in this control's space.
-# Custom entries may also have "font" (a Font for the label, e.g. a math font) and "icon" (a
+# Custom entries may also have "font" (a Font for the label) and "icon"
 # Texture2D drawn before the text, or alone when the text is empty).
 var items: Array[Dictionary] = []
 # Index of the item currently held down, or -1.

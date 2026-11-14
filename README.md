@@ -38,7 +38,7 @@ The optional floating Cut / Copy / Paste / Select all toolbar:
 * **Windows and SubViewports:** controls in a separate `Window`, an embedded window or a `SubViewport` get their handles and toolbar inside their own viewport.
 * **Multiple carets:** a `TextEdit` with several carets gets handles for every caret, each draggable on its own.
 * **Customizable:** use your own handle texture, size and color.
-* **Your own toolbar buttons:** add buttons (or a submenu, like an Insert menu) at the position you choose; index 0 is the leftmost.
+* **Your own toolbar buttons:** add buttons (or a submenu) at the position you choose; index 0 is the leftmost.
 * **Custom controls:** your own text or math editors get the handles and the toolbar too. Return a small delegate object from `_get_caret_delegate()`, with no dependency on MobileCaret, or register an adapter from code (see [Custom controls](#custom-controls)).
 
 ## Installation
@@ -168,7 +168,7 @@ MobileCaretToolbar.clear_items()
 | `callback` | Called with the focused control when the button is pressed. |
 | `children` | Dictionaries with the same keys (`id`, `text`, `callback`, `items`, `font`, `icon`). The button then opens a submenu. |
 | `when` | `"always"` (default), `"selection"` (only while text is selected) or `"caret"` (only without a selection). |
-| `font`, `icon` | An optional font for the label (for example a math font for ∑ and ∫), and an optional `Texture2D` shown before the label (or alone, with an empty label). |
+| `font`, `icon` | An optional font for the label (for example one with special symbols), and an optional `Texture2D` shown before the label (or alone, with an empty label). |
 
 `add_item_spec(spec)` takes the same fields as one Dictionary. A custom control can also bring its own buttons, which show only while it has the focus; see `get_toolbar_items()` below.
 
