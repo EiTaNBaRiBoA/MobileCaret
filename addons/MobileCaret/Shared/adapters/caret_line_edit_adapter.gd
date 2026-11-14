@@ -55,6 +55,45 @@ func select_word_at(pos: Vector2i) -> void:
 	_edit().select(word.x, word.y)
 	_edit().caret_column = word.y
 
+func is_secret() -> bool:
+	return _edit().secret
+
+func get_text_version() -> int:
+	return _edit().text.hash()
+
+func get_selected_text() -> String:
+	return "" if _edit().secret else _edit().get_selected_text()
+
+func is_everything_selected() -> bool:
+	var edit: LineEdit = _edit()
+	return edit.has_selection() and edit.get_selection_from_column() == 0 and edit.get_selection_to_column() == edit.text.length()
+
+# The engine's own menu actions (they respect `secret`, `editable` and the undo history).
+func copy() -> void:
+	_edit().menu_option(LineEdit.MENU_COPY)
+
+func cut() -> void:
+	_edit().menu_option(LineEdit.MENU_CUT)
+
+func paste() -> void:
+	_edit().menu_option(LineEdit.MENU_PASTE)
+
+func select_all() -> void:
+	_edit().select_all()
+
+# LineEdit cannot report whether it has something to undo, so Undo and Redo are always offered.
+func has_undo() -> bool:
+	return true
+
+func has_redo() -> bool:
+	return true
+
+func undo() -> void:
+	_edit().menu_option(LineEdit.MENU_UNDO)
+
+func redo() -> void:
+	_edit().menu_option(LineEdit.MENU_REDO)
+
 func get_line_height() -> float:
 	return _font().get_height(_font_size())
 

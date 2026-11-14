@@ -4,6 +4,8 @@
 class_name caret_toolbar_panel extends Control
 
 # Entries: { "id": StringName, "text": String, "rect": Rect2 } with rects in this control's space.
+# Custom entries may also have "font" (a Font for the label, e.g. a math font) and "icon" (a
+# Texture2D drawn before the text, or alone when the text is empty).
 var items: Array[Dictionary] = []
 # Index of the item currently held down, or -1.
 var pressed_index: int = -1:
@@ -45,10 +47,12 @@ func set_items(entries: Array[Dictionary]) -> void:
 	relayout()
 
 func relayout() -> void:
-	var font: Font = get_theme_default_font()
 	var x: float = 0.0
 	for item: Dictionary in items:
-		var text_width: float = font.get_string_size(item["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+		var text_width: float = _font_of(item).get_string_size(item["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+		var icon: Texture2D = item.get("icon") as Texture2D
+		if icon != null:
+			text_width += _icon_size(icon).x + (font_size * 0.3 if item["text"] != "" else 0.0)
 		var width: float = text_width + bar_height * 0.9
 		item["rect"] = Rect2(x, 0.0, width, bar_height)
 		x += width
@@ -56,6 +60,15 @@ func relayout() -> void:
 	custom_minimum_size = Vector2(x, bar_height)
 	size = Vector2(x, bar_height)
 	queue_redraw()
+
+func _font_of(item: Dictionary) -> Font:
+	var custom: Font = item.get("font") as Font
+	return custom if custom != null else get_theme_default_font()
+
+# An icon is drawn at the height of the text (scaled, keeping its aspect).
+func _icon_size(icon: Texture2D) -> Vector2:
+	var height: float = font_size * 1.2
+	return Vector2(height * icon.get_width() / maxf(1.0, float(icon.get_height())), height)
 
 # Index of the item at a point in this control's space, or -1.
 func item_at(local_point: Vector2) -> int:
@@ -76,8 +89,8 @@ func _draw() -> void:
 	background.shadow_size = int(bar_height * 0.12)
 	draw_style_box(background, Rect2(Vector2.ZERO, size))
 
-	var font: Font = get_theme_default_font()
 	for i: int in items.size():
+		var font: Font = _font_of(items[i])
 		var rect: Rect2 = items[i]["rect"]
 		if i == pressed_index:
 			var highlight: StyleBoxFlat = StyleBoxFlat.new()
@@ -88,5 +101,14 @@ func _draw() -> void:
 			draw_line(Vector2(rect.position.x, rect.size.y * 0.25), Vector2(rect.position.x, rect.size.y * 0.75), separator_color, 1.0)
 		var text: String = items[i]["text"]
 		var text_size: Vector2 = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+		var icon: Texture2D = items[i].get("icon") as Texture2D
+		var content_width: float = text_size.x
+		if icon != null:
+			content_width += _icon_size(icon).x + (font_size * 0.3 if text != "" else 0.0)
+		var left: float = rect.position.x + (rect.size.x - content_width) * 0.5
+		if icon != null:
+			var icon_size: Vector2 = _icon_size(icon)
+			draw_texture_rect(icon, Rect2(Vector2(left, rect.position.y + (rect.size.y - icon_size.y) * 0.5), icon_size), false, text_color)
+			left += icon_size.x + (font_size * 0.3 if text != "" else 0.0)
 		var baseline: float = rect.position.y + (rect.size.y + font.get_ascent(font_size) - font.get_descent(font_size)) * 0.5
-		draw_string(font, Vector2(rect.position.x + (rect.size.x - text_size.x) * 0.5, baseline), text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
+		draw_string(font, Vector2(left, baseline), text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)

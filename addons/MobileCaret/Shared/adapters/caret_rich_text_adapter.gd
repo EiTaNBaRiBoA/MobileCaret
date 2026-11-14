@@ -47,6 +47,18 @@ func get_selection_to(_caret_index: int = 0) -> Vector2i:
 func deselect() -> void:
 	_label().deselect()
 
+func get_text_version() -> int:
+	return _label().get_total_character_count()
+
+func get_selected_text() -> String:
+	return _selected_text()
+
+func is_everything_selected() -> bool:
+	return has_selection() and _selected_text() == _label().get_parsed_text()
+
+func select_all() -> void:
+	_label().select_all()
+
 func get_line_height() -> float:
 	var label: RichTextLabel = _label()
 	return label.get_theme_font("normal_font").get_height(label.get_theme_font_size("normal_font_size"))

@@ -38,6 +38,8 @@ The optional floating Cut / Copy / Paste / Select all toolbar:
 * **Windows and SubViewports:** controls in a separate `Window`, an embedded window or a `SubViewport` get their handles and toolbar inside their own viewport.
 * **Multiple carets:** a `TextEdit` with several carets gets handles for every caret, each draggable on its own.
 * **Customizable:** use your own handle texture, size and color.
+* **Your own toolbar buttons:** add buttons (or a submenu, like an Insert menu) at the position you choose; index 0 is the leftmost.
+* **Custom controls:** your own text or math editors get the handles and the toolbar too. Return a small delegate object from `_get_caret_delegate()`, with no dependency on MobileCaret, or register an adapter from code (see [Custom controls](#custom-controls)).
 
 ## Installation
 
@@ -95,7 +97,7 @@ If a control already has its own `caret_color` override, it is restored exactly 
 
 ### Floating toolbar
 
-The toolbar (`addons/MobileCaret/Toolbar`) is a separate autoload, `MobileCaretToolbar`. Nothing in the handles' code depends on it: remove its autoload, or switch it off in code, and everything else works the same. If the `MobileCaret` controller is present the toolbar also listens to its `handle_tapped` signal; without it the toolbar still works from focus and selection alone. It works for `LineEdit`, `TextEdit`, `CodeEdit`, the `LineEdit` inside a `SpinBox` and selectable `RichTextLabel`s, in the main window and in any other `Window` or `SubViewport`. A `RichTextLabel` gets the toolbar only: Godot cannot set its selection from code, so there are no selection handles for it.
+The toolbar (`addons/MobileCaret/Toolbar`) is a separate autoload, `MobileCaretToolbar`. Nothing in the handles' code depends on it: remove its autoload, or switch it off in code, and everything else works the same. If the `MobileCaret` controller is present the toolbar also listens to its `handle_tapped` signal; without it the toolbar still works from focus and selection alone. It works for `LineEdit`, `TextEdit`, `CodeEdit`, the `LineEdit` inside a `SpinBox` and selectable `RichTextLabel`s, and custom controls (see [Custom controls](#custom-controls)), in the main window and in any other `Window` or `SubViewport`. A `RichTextLabel` gets the toolbar only: Godot cannot set its selection from code, so there are no selection handles for it.
 
 * It appears above a selection once the selection has settled and no mouse button is held, so it stays out of the way while you drag a handle. If there is no room above, it goes below the selection. It keeps its physical size, only shrinking when a small viewport is too narrow for it.
 * It only offers what applies: Cut and Paste need an editable control, Paste needs something on the clipboard, and Select all is hidden when everything is already selected. A password field (`secret`) never offers Copy, Cut or Share.
@@ -129,6 +131,93 @@ MobileCaretToolbar.share_requested.connect(func(text): print("share: ", text))
 | `gap_mm` | Gap between the bar and the selection. |
 | `background_color`, `text_color`, `pressed_color` | Colors. |
 | `show_delay` | Seconds the selection must stay unchanged before the toolbar shows (default 0.2). |
+
+#### Your own buttons
+
+Add buttons to the toolbar and choose where they go. `index` is the position in the main row: 0 is the leftmost, and the built-in buttons move to the right. `-1` (the default) puts the button last, just before **···**. A button with children opens them as a submenu, with **‹** to go back.
+
+```gdscript
+# One button, first in the row. The callback gets the focused control.
+MobileCaretToolbar.add_item(&"bold", "B", 0, func(control): make_bold(control))
+
+# A submenu: "Insert" opens its children.
+MobileCaretToolbar.add_item(&"insert", "Insert", 0, Callable(), [
+	{"id": &"insert_date", "text": "Date", "callback": func(control): insert_date(control)},
+	{"id": &"insert_sign", "text": "Signature"},
+])
+
+MobileCaretToolbar.item_pressed.connect(func(id, control): print(id))  # every custom press
+MobileCaretToolbar.remove_item(&"bold")
+MobileCaretToolbar.clear_items()
+```
+
+| `add_item` argument | Description |
+| --- | --- |
+| `id` | A unique name. Adding an id again replaces the old button. It is also passed to `item_pressed` and `action_pressed`. |
+| `text` | The label. |
+| `index` | 0 = leftmost, -1 = last. Buttons with the same index keep the order they were added in. |
+| `callback` | Called with the focused control when the button is pressed. |
+| `children` | Dictionaries with the same keys (`id`, `text`, `callback`, `items`, `font`, `icon`). The button then opens a submenu. |
+| `when` | `"always"` (default), `"selection"` (only while text is selected) or `"caret"` (only without a selection). |
+| `font`, `icon` | An optional font for the label (for example a math font for ∑ and ∫), and an optional `Texture2D` shown before the label (or alone, with an empty label). |
+
+`add_item_spec(spec)` takes the same fields as one Dictionary. A custom control can also bring its own buttons, which show only while it has the focus; see `get_toolbar_items()` below.
+
+## Custom controls
+
+MobileCaret does not need to know about your control. Handles and the toolbar talk to every control through an *adapter*, and a custom control can provide one in two ways.
+
+### 1. A delegate (no dependency on MobileCaret)
+
+Add one method to your control. It returns an object that answers MobileCaret's questions; that object can be the control itself or a small helper. Your addon keeps working without MobileCaret, because nothing refers to MobileCaret's classes.
+
+```gdscript
+extends Control
+
+var _delegate := MyCaretDelegate.new(self)
+
+func _get_caret_delegate() -> Object:
+	return _delegate
+```
+
+The delegate has any of the methods below, with the same names and parameters as `caret_text_adapter`. Each method is optional: MobileCaret checks which ones exist and falls back to a default for the rest. A method may leave out trailing parameters, so a control with one caret can write `get_caret()` instead of `get_caret(caret_index: int = 0)`. Positions are `Vector2i(column, line)`, and points are in the control's own coordinates.
+
+| Method | Used for | Default |
+| --- | --- | --- |
+| `get_caret()`, `set_caret(pos)` | The caret handle and dragging it | `(0, 0)`, nothing |
+| `get_tip_local(pos)` | Where the handle's tip goes (bottom of the caret) | `(0, 0)` |
+| `get_pos_at_local(point)` | Which position a dragged handle or a long press points at | `(0, 0)` |
+| `get_line_height()` | Handle and toolbar placement | 16 |
+| `is_pos_visible(pos)` | Hiding handles that are scrolled away | The tip is inside the control |
+| `has_selection()`, `get_selection_from()`, `get_selection_to()`, `select(anchor, caret)`, `deselect()` | Selection handles and the toolbar | No selection |
+| `select_word_at(pos)` | Long press | Nothing |
+| `get_drag_target(point, current, delta)`, `get_row_x_extent(y)` | Edge scrolling and clamping while dragging | `get_pos_at_local`, the base adapter's version |
+| `get_caret_count()`, `merge_carets()` | Several carets | 1, nothing |
+| `supports_handles()` | `false` for a toolbar-only control (like a selectable label) | `true` |
+| `is_usable()` | `false` to switch MobileCaret off for the control for now | `true` |
+| `is_text_editable()`, `is_empty()`, `is_secret()` | Which toolbar buttons apply | `false`, `false`, `false` |
+| `get_selected_text()`, `is_everything_selected()` | Copy, Share, and hiding Select all | `""`, `false` |
+| `copy()`, `cut()`, `paste()`, `select_all()` | The toolbar buttons | `copy()` puts `get_selected_text()` on the clipboard; the others do nothing |
+| `has_undo()`, `has_redo()`, `undo()`, `redo()` | The overflow menu | `false`, nothing |
+| `get_text_version()` | Hiding the toolbar when the text changes | 0 |
+| `hide_native_caret(hidden)` | `hide_native_caret` / `hide_native_caret_while_dragging` | Makes the `caret_color` theme color transparent |
+| `get_toolbar_items()`, `toolbar_item_pressed(id)` | The control's own toolbar buttons: an Array of Dictionaries with the keys `add_item` takes (`id`, `text`, `index`, `items`, `when`, `font`, `icon`). A press calls `toolbar_item_pressed(id)` (and an item's `callback`, if it has one). | No buttons |
+
+The tests include a complete example: `tests/custom_text_field.gd`.
+
+If the delegate is the control itself, its own methods take part. For example, a `LineEdit` subclass already has `select(from, to)` with different parameters. In that case use a separate helper object.
+
+### 2. A registered adapter (depends on MobileCaret)
+
+To add MobileCaret support to a control you cannot change, subclass `caret_text_adapter` and register a factory. Registered factories are asked before the built-in adapters, so they can also replace the adapter of a `LineEdit` or `TextEdit` subclass.
+
+```gdscript
+var factory := func(control: Control) -> caret_text_adapter:
+	return MyAdapter.new(control) if control is MyEditor else null
+caret_text_adapter.register_adapter(factory)
+# ...
+caret_text_adapter.unregister_adapter(factory)
+```
 
 ## Compatibility
 

@@ -3,7 +3,18 @@
 # All "local" coordinates are in the text control's own coordinate space.
 # Controls with several carets (a TextEdit with multiple carets) are addressed by `caret_index`;
 # index 0 is the main caret.
+#
+# Custom controls get handles and the toolbar in one of two ways (see "Custom controls" in the
+# README):
+#  * Without depending on MobileCaret: the control implements `_get_caret_delegate() -> Object`
+#    and returns an object (often the control itself) with any of this class's methods. Missing
+#    methods fall back to sensible defaults. See caret_delegate_adapter.
+#  * With a dependency: register a factory with register_adapter() that returns a subclass of
+#    this class for the controls it handles (also works for controls you cannot change).
 class_name caret_text_adapter extends RefCounted
+
+# Name of the method a custom control implements to provide its delegate.
+const DELEGATE_METHOD: StringName = &"_get_caret_delegate"
 
 # The wrapped text control.
 var control: Control
@@ -11,14 +22,35 @@ var control: Control
 # edge-scroll zones are multiplied by it so they stay finger-sized on any screen.
 var ui_scale: float = 1.0
 
+# Factories added with register_adapter(), asked first, newest first.
+static var _factories: Array[Callable] = []
+
+# Saved caret_color override while the native caret is hidden (see hide_native_caret).
+var _caret_hidden: bool = false
+var _had_caret_override: bool = false
+var _saved_caret_color: Color = Color.WHITE
+
 
 func _init(text_control: Control) -> void:
 	control = text_control
 
 
-# Returns an adapter for a control that can show caret handles (LineEdit, TextEdit and subclasses),
-# or null for anything else.
+# Adds a factory `func(control: Control) -> caret_text_adapter` that returns an adapter for the
+# controls it knows, or null. Registered factories are asked before the built-in adapters, so they
+# can also replace the adapter of a LineEdit or TextEdit subclass.
+static func register_adapter(factory: Callable) -> void:
+	if not _factories.has(factory):
+		_factories.push_front(factory)
+
+static func unregister_adapter(factory: Callable) -> void:
+	_factories.erase(factory)
+
+# Returns an adapter for a control that can show caret handles (LineEdit, TextEdit and subclasses,
+# controls with a delegate, controls a registered factory handles), or null for anything else.
 static func for_control(text_control: Control) -> caret_text_adapter:
+	var adapter: caret_text_adapter = _custom_adapter(text_control)
+	if adapter != null:
+		return adapter if adapter.supports_handles() else null
 	if text_control is LineEdit:
 		return caret_line_edit_adapter.new(text_control)
 	if text_control is TextEdit:
@@ -26,13 +58,34 @@ static func for_control(text_control: Control) -> caret_text_adapter:
 	return null
 
 # Like for_control(), but also returns adapters for controls that only support the toolbar
-# (selectable RichTextLabels: their selection can be read and copied but not set).
+# (selectable RichTextLabels: their selection can be read and copied but not set; custom
+# adapters whose supports_handles() is false).
 static func for_toolbar(text_control: Control) -> caret_text_adapter:
-	var adapter: caret_text_adapter = for_control(text_control)
+	var adapter: caret_text_adapter = _custom_adapter(text_control)
+	if adapter != null:
+		return adapter if adapter.is_usable() else null
+	adapter = for_control(text_control)
 	if adapter != null:
 		return adapter
 	if text_control is RichTextLabel and (text_control as RichTextLabel).selection_enabled:
 		return caret_rich_text_adapter.new(text_control)
+	return null
+
+# An adapter from a registered factory or from the control's delegate, or null.
+static func _custom_adapter(text_control: Control) -> caret_text_adapter:
+	if not is_instance_valid(text_control):
+		return null
+	for factory: Callable in _factories.duplicate():
+		if not factory.is_valid():
+			_factories.erase(factory)
+			continue
+		var made: Variant = factory.call(text_control)
+		if made is caret_text_adapter:
+			return made as caret_text_adapter
+	if text_control.has_method(DELEGATE_METHOD):
+		var delegate: Variant = text_control.call(DELEGATE_METHOD)
+		if delegate is Object and is_instance_valid(delegate):
+			return caret_delegate_adapter.new(text_control, delegate as Object)
 	return null
 
 
@@ -159,6 +212,80 @@ func get_row_x_extent(local_y: float) -> Vector2:
 # Also scrolls the control when the point is dragged past an edge.
 func get_drag_target(local: Vector2, _current: Vector2i, _delta: float) -> Vector2i:
 	return get_pos_at_local(local)
+
+#endregion
+
+#region Toolbar actions
+
+# True for text that must never be copied (a password field).
+func is_secret() -> bool:
+	return false
+
+# A number that changes whenever the text changes (the toolbar hides when it does).
+func get_text_version() -> int:
+	return 0
+
+func get_selected_text() -> String:
+	return ""
+
+func is_everything_selected() -> bool:
+	return false
+
+func copy() -> void:
+	if has_any_selection() and not is_secret():
+		DisplayServer.clipboard_set(get_selected_text())
+
+func cut() -> void:
+	pass
+
+func paste() -> void:
+	pass
+
+func select_all() -> void:
+	pass
+
+func has_undo() -> bool:
+	return false
+
+func has_redo() -> bool:
+	return false
+
+func undo() -> void:
+	pass
+
+func redo() -> void:
+	pass
+
+# Extra toolbar buttons for this control: Dictionaries like the ones caret_toolbar.add_item()
+# takes ("id", "text", "index", "items", "when", "font", "icon"); no callback, the press arrives
+# in toolbar_item_pressed().
+func get_toolbar_items() -> Array:
+	return []
+
+func toolbar_item_pressed(_id: StringName) -> void:
+	pass
+
+#endregion
+
+#region Native caret
+
+# Hides or shows the control's own caret. The default makes the `caret_color` theme color
+# transparent and puts back whatever override was there before.
+func hide_native_caret(hidden: bool) -> void:
+	if hidden == _caret_hidden or not is_instance_valid(control):
+		_caret_hidden = hidden and is_instance_valid(control)
+		return
+	_caret_hidden = hidden
+	if hidden:
+		_had_caret_override = control.has_theme_color_override("caret_color")
+		_saved_caret_color = control.get_theme_color("caret_color")
+		var transparent: Color = _saved_caret_color
+		transparent.a = 0.0
+		control.add_theme_color_override("caret_color", transparent)
+	elif _had_caret_override:
+		control.add_theme_color_override("caret_color", _saved_caret_color)
+	else:
+		control.remove_theme_color_override("caret_color")
 
 #endregion
 

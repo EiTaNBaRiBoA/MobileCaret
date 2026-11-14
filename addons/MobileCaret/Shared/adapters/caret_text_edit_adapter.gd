@@ -76,6 +76,43 @@ func select_word_at(pos: Vector2i) -> void:
 		return
 	select(Vector2i(word.x, pos.y), Vector2i(word.y, pos.y))
 
+func get_text_version() -> int:
+	return _edit().get_version()
+
+func get_selected_text() -> String:
+	return _edit().get_selected_text()
+
+func is_everything_selected() -> bool:
+	var edit: TextEdit = _edit()
+	if not edit.has_selection(-1):
+		return false
+	var last_line: int = edit.get_line_count() - 1
+	return get_selection_from() == Vector2i.ZERO and get_selection_to() == Vector2i(edit.get_line(last_line).length(), last_line)
+
+func copy() -> void:
+	_edit().copy()
+
+func cut() -> void:
+	_edit().cut()
+
+func paste() -> void:
+	_edit().paste()
+
+func select_all() -> void:
+	_edit().select_all()
+
+func has_undo() -> bool:
+	return _edit().has_undo()
+
+func has_redo() -> bool:
+	return _edit().has_redo()
+
+func undo() -> void:
+	_edit().undo()
+
+func redo() -> void:
+	_edit().redo()
+
 func get_line_height() -> float:
 	return float(_edit().get_line_height())
 

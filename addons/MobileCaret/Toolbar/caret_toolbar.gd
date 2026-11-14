@@ -1,6 +1,6 @@
-# Floating Cut / Copy / Paste / Select all toolbar for the focused LineEdit, TextEdit, CodeEdit or
-# selectable RichTextLabel, in the style of Android's text selection toolbar, with an overflow
-# menu (Undo / Redo / Share).
+# Floating Cut / Copy / Paste / Select all toolbar for the focused LineEdit, TextEdit, CodeEdit,
+# selectable RichTextLabel or custom control (see caret_text_adapter), in the style of Android's
+# text selection toolbar, with an overflow menu (Undo / Redo / Share).
 #
 # It is independent of the carets controller:
 #  * Add it as an autoload (the plugin does) or as a node anywhere in the tree.
@@ -16,6 +16,8 @@ class_name caret_toolbar extends CanvasLayer
 # Emitted after an action ran. `action` is "cut", "copy", "paste", "select_all", "undo", "redo"
 # or "share".
 signal action_pressed(action: StringName)
+# Emitted when a custom item (see add_item) is pressed, with the control it was pressed for.
+signal item_pressed(id: StringName, control: Control)
 # Emitted by the Share button with the selected text. The toolbar cannot share by itself (that is
 # platform specific); connect this to your share code. The button only shows when `show_share` is on.
 signal share_requested(text: String)
@@ -133,6 +135,9 @@ var _tap_was_showing: bool = false
 var _tap_swallowed: bool = false
 var _tap_event: InputEventMouseButton = null
 var _replaying: bool = false
+# Custom items added with add_item(), and the custom item whose submenu is open (or &"").
+var _custom_items: Array[Dictionary] = []
+var _submenu: StringName = &""
 
 
 func _ready() -> void:
@@ -170,6 +175,7 @@ func _process(delta: float) -> void:
 		_stable_time = 0.0
 		_dismissed = false
 		_overflow_open = false
+		_submenu = &""
 		# The bare-caret toolbar goes away as soon as the caret moves or the text changes.
 		if _caret_mode and signature != _caret_signature:
 			_caret_mode = false
@@ -212,6 +218,43 @@ func hide_toolbar() -> void:
 
 func is_showing() -> bool:
 	return _panel != null and _panel.visible
+
+# Adds a button for every control.
+#  * `index`: its place in the main row, 0 being the leftmost (the built-in buttons move right);
+#    -1 puts it last, before the ··· button. Items with the same index keep the order they were
+#    added in.
+#  * `callback`: called with the focused control when the button is pressed (item_pressed is
+#    emitted too).
+#  * `children`: Dictionaries of the same kind ({"id", "text", "callback", "items", ...}); the
+#    button then opens them as a submenu with a ‹ button to go back.
+#  * `when`: "always", "selection" (only with a selection) or "caret" (only without one).
+#  * `font` / `icon`: an optional Font for the label (a math font, say) and a Texture2D icon.
+# Adding an id again replaces the old item.
+func add_item(id: StringName, text: String, index: int = -1, callback: Callable = Callable(), children: Array = [], when: String = "always", font: Font = null, icon: Texture2D = null) -> void:
+	add_item_spec({"id": id, "text": text, "index": index, "callback": callback, "items": children, "when": when, "font": font, "icon": icon})
+
+# Same as add_item() with the fields in one Dictionary.
+func add_item_spec(spec: Dictionary) -> void:
+	remove_item(StringName(spec.get("id", &"")))
+	_custom_items.append(spec)
+
+func remove_item(id: StringName) -> void:
+	for i: int in range(_custom_items.size() - 1, -1, -1):
+		if StringName(_custom_items[i].get("id", &"")) == id:
+			_custom_items.remove_at(i)
+
+func clear_items() -> void:
+	_custom_items.clear()
+	_submenu = &""
+
+# The custom items added with add_item().
+func get_items() -> Array[Dictionary]:
+	return _custom_items.duplicate()
+
+# Opens the submenu of a custom item (as if it was pressed), or closes it with &"".
+func open_submenu(id: StringName) -> void:
+	_submenu = id
+	_overflow_open = false
 
 # Rectangle (viewport space) of one button, or an empty Rect2 if it is not shown.
 func get_button_rect(action: StringName) -> Rect2:
@@ -288,6 +331,7 @@ func _validate_focus() -> void:
 
 func _clear_adapter() -> void:
 	_adapter = null
+	_submenu = &""
 	_caret_mode = false
 	_dismissed = false
 	_overflow_open = false
@@ -296,20 +340,12 @@ func _clear_adapter() -> void:
 	_hide_panels()
 
 func _make_signature() -> String:
-	var control: Control = _adapter.control
-	# Something that changes whenever the text does: its length for a LineEdit, the edit version
-	# for a TextEdit.
-	var text_length: int = 0
-	if control is LineEdit:
-		text_length = (control as LineEdit).text.length()
-	elif control is TextEdit:
-		text_length = (control as TextEdit).get_version()
-	elif control is RichTextLabel:
-		text_length = (control as RichTextLabel).get_total_character_count()
+	# Something that changes whenever the text does.
+	var version: int = _adapter.get_text_version()
 	if _adapter.has_any_selection():
 		var index: int = maxi(_adapter.get_selection_caret(), 0)
-		return "s%s-%s-%d-%d" % [str(_adapter.get_selection_from(index)), str(_adapter.get_selection_to(index)), text_length, _adapter.get_caret_count()]
-	return "c%s-%d-%d" % [str(_adapter.get_caret()), text_length, _adapter.get_caret_count()]
+		return "s%s-%s-%d-%d" % [str(_adapter.get_selection_from(index)), str(_adapter.get_selection_to(index)), version, _adapter.get_caret_count()]
+	return "c%s-%d-%d" % [str(_adapter.get_caret()), version, _adapter.get_caret_count()]
 
 func _is_pointer_down() -> bool:
 	return Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT) or _viewport_pressed
@@ -345,29 +381,50 @@ func _on_handle_tapped(control: Control) -> void:
 #region Buttons and placement
 
 func _is_everything_selected() -> bool:
-	if not _adapter.has_any_selection():
-		return false
-	var control: Control = _adapter.control
-	if control is LineEdit:
-		var edit: LineEdit = control
-		return edit.get_selection_from_column() == 0 and edit.get_selection_to_column() == edit.text.length()
-	if control is TextEdit:
-		var text_edit: TextEdit = control
-		var last_line: int = text_edit.get_line_count() - 1
-		return _adapter.get_selection_from() == Vector2i.ZERO and _adapter.get_selection_to() == Vector2i(text_edit.get_line(last_line).length(), last_line)
-	if control is RichTextLabel:
-		var label: RichTextLabel = control
-		return label.get_selected_text() == label.get_parsed_text()
-	return false
+	return _adapter.has_any_selection() and _adapter.is_everything_selected()
 
 func _entry(id: StringName, text: String) -> Dictionary:
 	return {"id": id, "text": text, "rect": Rect2()}
 
+func _custom_entry(spec: Dictionary) -> Dictionary:
+	var entry: Dictionary = _entry(StringName(spec.get("id", &"")), str(spec.get("text", "")))
+	entry["font"] = spec.get("font")
+	entry["icon"] = spec.get("icon")
+	entry["custom"] = true
+	return entry
+
+# The custom items that apply now: the toolbar's own and the focused control's.
+func _custom_specs() -> Array[Dictionary]:
+	var specs: Array[Dictionary] = []
+	var has_selection: bool = _adapter.has_any_selection()
+	var all: Array = []
+	all.append_array(_custom_items)
+	all.append_array(_adapter.get_toolbar_items())
+	for spec: Variant in all:
+		if not (spec is Dictionary):
+			continue
+		var when: String = str((spec as Dictionary).get("when", "always"))
+		if (when == "selection" and not has_selection) or (when == "caret" and has_selection):
+			continue
+		specs.append(spec as Dictionary)
+	return specs
+
+# A custom item by id, searched through the submenus too.
+static func _find_spec(id: StringName, specs: Array) -> Dictionary:
+	for spec: Variant in specs:
+		if not (spec is Dictionary):
+			continue
+		if StringName((spec as Dictionary).get("id", &"")) == id:
+			return spec as Dictionary
+		var found: Dictionary = _find_spec(id, (spec as Dictionary).get("items", []) as Array)
+		if not found.is_empty():
+			return found
+	return {}
+
 # The buttons of the main row and the overflow menu that apply right now.
 func _build_entries() -> Array[Dictionary]:
-	var control: Control = _adapter.control
 	# The engine refuses to copy or cut a password field, so nothing here may leak its text.
-	var secret: bool = control is LineEdit and (control as LineEdit).secret
+	var secret: bool = _adapter.is_secret()
 	var has_selection: bool = _adapter.has_any_selection()
 	var copyable: bool = has_selection and not secret
 	var editable: bool = _adapter.is_text_editable()
@@ -383,21 +440,48 @@ func _build_entries() -> Array[Dictionary]:
 
 	var overflow: Array[Dictionary] = []
 	if show_overflow:
-		if editable and show_undo and (not (control is TextEdit) or (control as TextEdit).has_undo()):
+		if editable and show_undo and _adapter.has_undo():
 			overflow.append(_entry(ACTION_UNDO, text_undo))
-		if editable and show_redo and (not (control is TextEdit) or (control as TextEdit).has_redo()):
+		if editable and show_redo and _adapter.has_redo():
 			overflow.append(_entry(ACTION_REDO, text_redo))
 		if show_share and copyable:
 			overflow.append(_entry(ACTION_SHARE, text_share))
+
+	var specs: Array[Dictionary] = _custom_specs()
+	if _submenu != &"":
+		var open: Dictionary = _find_spec(_submenu, specs)
+		var children: Array = open.get("items", []) as Array
+		if not children.is_empty():
+			var page: Array[Dictionary] = [_entry(ITEM_BACK, text_back)]
+			for child: Variant in children:
+				if child is Dictionary:
+					page.append(_custom_entry(child as Dictionary))
+			return page
+		_submenu = &""
 
 	if _overflow_open and not overflow.is_empty():
 		var menu: Array[Dictionary] = [_entry(ITEM_BACK, text_back)]
 		menu.append_array(overflow)
 		return menu
 	_overflow_open = false
+	# Custom items go to their index (0 = leftmost), lowest index first.
+	var ordered: Array[Dictionary] = specs.duplicate()
+	ordered.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return _sort_index(a) < _sort_index(b))
+	var last: Array[Dictionary] = []
+	for spec: Dictionary in ordered:
+		var index: int = int(spec.get("index", -1))
+		if index < 0:
+			last.append(_custom_entry(spec))
+		else:
+			main_row.insert(mini(index, main_row.size()), _custom_entry(spec))
+	main_row.append_array(last)
 	if not overflow.is_empty():
 		main_row.append(_entry(ITEM_MORE, text_more))
 	return main_row
+
+static func _sort_index(spec: Dictionary) -> int:
+	var index: int = int(spec.get("index", -1))
+	return index if index >= 0 else 1 << 30
 
 # Builds the list of buttons that apply right now. Returns false if there are none.
 func _rebuild_items() -> bool:
@@ -619,44 +703,59 @@ func _toggle_for_tap() -> void:
 func _perform(action: StringName) -> void:
 	if _adapter == null or not _adapter.is_valid():
 		return
-	var control: Control = _adapter.control
+	if action != ITEM_BACK and action != ITEM_MORE:
+		var custom: Dictionary = _find_spec(action, _custom_specs())
+		if not custom.is_empty():
+			_perform_custom(action, custom)
+			return
 	match action:
 		ITEM_MORE:
 			_overflow_open = true
 			return
 		ITEM_BACK:
-			_overflow_open = false
+			if _submenu != &"":
+				_submenu = &""
+			else:
+				_overflow_open = false
 			return
 		ACTION_CUT:
-			_menu(control, LineEdit.MENU_CUT, "cut")
+			_adapter.cut()
 		ACTION_COPY:
-			if control is RichTextLabel:
-				DisplayServer.clipboard_set((control as RichTextLabel).get_selected_text())
-			else:
-				_menu(control, LineEdit.MENU_COPY, "copy")
+			_adapter.copy()
 			# Like Android: the selection stays, the toolbar goes away until it changes.
 			_dismissed = true
 			_caret_mode = false
 		ACTION_PASTE:
-			_menu(control, LineEdit.MENU_PASTE, "paste")
+			_adapter.paste()
 		ACTION_SELECT_ALL:
-			control.call(&"select_all")
+			_adapter.select_all()
 		ACTION_UNDO:
-			_menu(control, LineEdit.MENU_UNDO, "undo")
+			_adapter.undo()
 			_overflow_open = false
 		ACTION_REDO:
-			_menu(control, LineEdit.MENU_REDO, "redo")
+			_adapter.redo()
 			_overflow_open = false
 		ACTION_SHARE:
-			share_requested.emit(control.call(&"get_selected_text"))
+			if not _adapter.is_secret():
+				share_requested.emit(_adapter.get_selected_text())
 			_overflow_open = false
 	_stable_time = 0.0
 	action_pressed.emit(action)
 
-func _menu(control: Control, line_edit_item: int, text_edit_method: String) -> void:
-	if control is LineEdit:
-		(control as LineEdit).menu_option(line_edit_item)
-	else:
-		control.call(text_edit_method)
+func _perform_custom(id: StringName, spec: Dictionary) -> void:
+	var children: Array = spec.get("items", []) as Array
+	if not children.is_empty():
+		open_submenu(id)
+		return
+	var control: Control = _adapter.control
+	_submenu = &""
+	var callback: Variant = spec.get("callback")
+	if callback is Callable and (callback as Callable).is_valid():
+		(callback as Callable).call(control)
+	if _adapter != null and _adapter.is_valid():
+		_adapter.toolbar_item_pressed(id)
+	_stable_time = 0.0
+	item_pressed.emit(id, control)
+	action_pressed.emit(id)
 
 #endregion

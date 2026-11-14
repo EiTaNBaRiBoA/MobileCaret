@@ -1,4 +1,5 @@
-# Shows draggable caret handles for the focused LineEdit/TextEdit/CodeEdit.
+# Shows draggable caret handles for the focused LineEdit/TextEdit/CodeEdit or custom control (see
+# caret_text_adapter).
 #
 #  * No selection: one handle under the caret. Dragging it moves the caret.
 #  * Selection:    two handles (start/end). Dragging one moves that end of the selection;
@@ -92,10 +93,8 @@ var _idle_time: float = 0.0
 var _caret_alpha: float = 1.0
 var _last_carets: PackedInt32Array = PackedInt32Array()
 
-# Saved state of the control's caret_color override while the native caret is hidden.
-var _hidden_caret_control: Control = null
-var _had_caret_override: bool = false
-var _saved_caret_color: Color = Color.WHITE
+# The adapter whose control's native caret is hidden right now (it restores it).
+var _hidden_caret_adapter: caret_text_adapter = null
 
 
 func _ready() -> void:
@@ -482,24 +481,17 @@ func _update_native_caret() -> void:
 	var hide_it: bool = _handles_showing() and (hide_native_caret or (hide_native_caret_while_dragging and _drag_handle != null))
 	_set_native_caret_hidden(hide_it)
 
-# Makes the control's own caret transparent, remembering any existing override to restore it.
+# Hides or shows the control's own caret through its adapter (which restores what was there).
 func _set_native_caret_hidden(hidden: bool) -> void:
 	if hidden:
-		if _hidden_caret_control != null or _adapter == null:
+		if _hidden_caret_adapter != null or _adapter == null:
 			return
-		_hidden_caret_control = _adapter.control
-		_had_caret_override = _hidden_caret_control.has_theme_color_override("caret_color")
-		_saved_caret_color = _hidden_caret_control.get_theme_color("caret_color")
-		var transparent: Color = _saved_caret_color
-		transparent.a = 0.0
-		_hidden_caret_control.add_theme_color_override("caret_color", transparent)
-	elif _hidden_caret_control != null:
-		if is_instance_valid(_hidden_caret_control):
-			if _had_caret_override:
-				_hidden_caret_control.add_theme_color_override("caret_color", _saved_caret_color)
-			else:
-				_hidden_caret_control.remove_theme_color_override("caret_color")
-		_hidden_caret_control = null
+		_hidden_caret_adapter = _adapter
+		_adapter.hide_native_caret(true)
+	elif _hidden_caret_adapter != null:
+		if _hidden_caret_adapter.is_valid():
+			_hidden_caret_adapter.hide_native_caret(false)
+		_hidden_caret_adapter = null
 
 #endregion
 

@@ -68,6 +68,24 @@ func _check(condition: bool, message: String) -> void:
 	else:
 		print("ok:   ", message)
 
+# Waits (up to 20 frames) for a condition. The system clipboard can lag behind a copy for a
+# moment on Windows, so clipboard checks wait for it first.
+func _wait_for(condition: Callable) -> void:
+	for i: int in 20:
+		if condition.call():
+			return
+		await _frames(1)
+
+# Reads the system clipboard. On Windows a read can come back empty while another program (a
+# clipboard manager) has the clipboard open, so an empty read is tried again.
+func _clip() -> String:
+	for i: int in 5:
+		var value: String = DisplayServer.clipboard_get()
+		if value != "":
+			return value
+		OS.delay_msec(10)
+	return ""
+
 func _frames(count: int) -> void:
 	for i: int in count:
 		await get_tree().process_frame
@@ -174,7 +192,8 @@ func _test_line_edit_actions() -> void:
 	_check(get_viewport().get_visible_rect().encloses(bar), "the toolbar stays inside the viewport")
 
 	await _press_button(&"copy")
-	_check(DisplayServer.clipboard_get() == "brave", "Copy puts the selection on the clipboard (got '%s')" % DisplayServer.clipboard_get())
+	await _wait_for(func() -> bool: return _clip() == "brave")
+	_check(_clip() == "brave", "Copy puts the selection on the clipboard (got '%s')" % _clip())
 	_check(edit.has_selection() and edit.get_selected_text() == "brave", "Copy keeps the selection")
 	_check(edit.has_focus(), "the text control keeps focus when a toolbar button is pressed")
 	await _frames(15)
@@ -182,7 +201,8 @@ func _test_line_edit_actions() -> void:
 
 	await _select_and_wait(edit, Vector2i(0, 0), Vector2i(5, 0))
 	await _press_button(&"cut")
-	_check(edit.text == " brave new world" and DisplayServer.clipboard_get() == "hello", "Cut removes the selection and copies it (text '%s', clipboard '%s')" % [edit.text, DisplayServer.clipboard_get()])
+	await _wait_for(func() -> bool: return edit.text == " brave new world" and _clip() == "hello")
+	_check(edit.text == " brave new world" and _clip() == "hello", "Cut removes the selection and copies it (text '%s', clipboard '%s')" % [edit.text, _clip()])
 
 	# Paste at the caret: shown through show_for_caret().
 	DisplayServer.clipboard_set("AB")
@@ -278,7 +298,8 @@ func _test_other_controls() -> void:
 	_check(_toolbar.is_showing() and _button_ids().size() >= 4, "TextEdit: the toolbar shows with all buttons (got %s)" % str(_button_ids()))
 	_check(_toolbar.get_toolbar_rect().end.y <= _tip_of(text_edit, Vector2i(6, 0)).y, "TextEdit: the toolbar is above the selection")
 	await _press_button(&"copy")
-	_check(DisplayServer.clipboard_get().replace("\r\n", "\n") == "beta gamma\nseco", "TextEdit: Copy copies a multi-line selection (got '%s')" % DisplayServer.clipboard_get())
+	await _wait_for(func() -> bool: return _clip().replace("\r\n", "\n") == "beta gamma\nseco")
+	_check(_clip().replace("\r\n", "\n") == "beta gamma\nseco", "TextEdit: Copy copies a multi-line selection (got '%s')" % _clip())
 	await _select_and_wait(text_edit, Vector2i(0, 2), Vector2i(5, 2))
 	await _press_button(&"cut")
 	_check(text_edit.get_line(2) == " line", "TextEdit: Cut removes the selection (line '%s')" % text_edit.get_line(2))
@@ -286,7 +307,8 @@ func _test_other_controls() -> void:
 	await _select_and_wait(code_edit, Vector2i(5, 1), Vector2i(10, 1))
 	_check(_toolbar.is_showing() and _button_ids().size() >= 4, "CodeEdit: the toolbar shows with all buttons (got %s)" % str(_button_ids()))
 	await _press_button(&"copy")
-	_check(DisplayServer.clipboard_get() == code_edit.get_selected_text() and not DisplayServer.clipboard_get().is_empty(), "CodeEdit: Copy works (got '%s')" % DisplayServer.clipboard_get())
+	await _wait_for(func() -> bool: return _clip() == code_edit.get_selected_text() and not _clip().is_empty())
+	_check(_clip() == code_edit.get_selected_text() and not _clip().is_empty(), "CodeEdit: Copy works (got '%s')" % _clip())
 	await _select_and_wait(code_edit, Vector2i(0, 0), Vector2i(4, 0))
 	DisplayServer.clipboard_set("XY")
 	await _press_button(&"paste")
@@ -296,7 +318,8 @@ func _test_other_controls() -> void:
 	await _select_and_wait(line, Vector2i(1, 0), Vector2i(4, 0))
 	_check(_toolbar.is_showing() and _button_ids().size() >= 4, "SpinBox: the toolbar shows for its LineEdit (got %s)" % str(_button_ids()))
 	await _press_button(&"copy")
-	_check(DisplayServer.clipboard_get() == "234", "SpinBox: Copy works (got '%s')" % DisplayServer.clipboard_get())
+	await _wait_for(func() -> bool: return _clip() == "234")
+	_check(_clip() == "234", "SpinBox: Copy works (got '%s')" % _clip())
 
 
 func _test_switches() -> void:
@@ -556,7 +579,8 @@ func _test_rich_text_label() -> void:
 	_check(get_viewport().get_visible_rect().encloses(bar) and bar.end.y <= label.global_position.y + 30.0, "the toolbar is placed over the label (%s)" % str(bar))
 	var selected: String = label.get_selected_text()
 	await _press_button(&"copy")
-	_check(DisplayServer.clipboard_get() == selected, "Copy puts the selection on the clipboard (got '%s')" % DisplayServer.clipboard_get())
+	await _wait_for(func() -> bool: return _clip() == selected)
+	_check(_clip() == selected, "Copy puts the selection on the clipboard (got '%s')" % _clip())
 	await _frames(15)
 	_check(not _toolbar.is_showing(), "the toolbar hides after Copy")
 	# Tapping the label keeps the selection and brings the toolbar back.
@@ -605,7 +629,8 @@ func _test_without_carets_controller() -> void:
 	_check(edit.get_selected_text() == edit.text, "and Select all works")
 	await _wait_toolbar(true)
 	await _press_button(&"copy")
-	_check(DisplayServer.clipboard_get() == "works on its own", "and so does Copy (got '%s')" % DisplayServer.clipboard_get())
+	await _wait_for(func() -> bool: return _clip() == "works on its own")
+	_check(_clip() == "works on its own", "and so does Copy (got '%s')" % _clip())
 
 # Regressions found by the code review.
 func _test_review_fixes() -> void:
