@@ -137,6 +137,9 @@ func _red_line_edit(position: Vector2, size: Vector2 = Vector2(500.0, 60.0)) -> 
 	edit.add_theme_stylebox_override("normal", style)
 	edit.add_theme_stylebox_override("focus", style)
 	edit.caret_blink = false
+	# A LineEdit stops drawing its caret while the game window does not have OS focus (another
+	# window in front during the run), which left these pixel checks with nothing to read.
+	edit.caret_force_displayed = true
 	_root.add_child(edit)
 	return edit
 
