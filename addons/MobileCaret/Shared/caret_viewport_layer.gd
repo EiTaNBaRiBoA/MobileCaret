@@ -18,8 +18,8 @@ static func get_or_create(viewport: Viewport, layer_name: String, layer_index: i
 	var existing: Node = viewport.get_node_or_null(layer_name)
 	if existing is caret_viewport_layer:
 		return existing
-	var layer: caret_viewport_layer = caret_viewport_layer.new()
-	layer.name = layer_name
-	layer.layer = layer_index
-	viewport.add_child(layer)
-	return layer
+	var created: caret_viewport_layer = caret_viewport_layer.new()
+	created.name = layer_name
+	created.layer = layer_index
+	viewport.add_child(created)
+	return created

@@ -67,7 +67,6 @@ func get_line_height() -> float:
 func get_tip_local(pos: Vector2i) -> Vector2:
 	var label: RichTextLabel = _label()
 	var line: int = label.get_character_line(pos.x)
-	var top: float = label.get_line_offset(line)
 	var bottom: float = label.get_line_offset(line + 1) if line + 1 < label.get_line_count() else float(label.get_content_height())
 	var scroll: float = label.get_v_scroll_bar().value if label.scroll_active else 0.0
 	return Vector2(label.size.x * 0.5, bottom - scroll)

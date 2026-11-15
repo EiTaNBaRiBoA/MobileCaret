@@ -159,11 +159,11 @@ func _tip_of(control: Control, pos: Vector2i) -> Vector2:
 	var adapter: caret_text_adapter = caret_text_adapter.for_control(control)
 	return control.get_global_transform_with_canvas() * adapter.get_tip_local(pos)
 
-func _screenshot(name: String) -> void:
+func _screenshot(file_name: String) -> void:
 	if _screenshots_dir.is_empty():
 		return
 	await RenderingServer.frame_post_draw
-	get_viewport().get_texture().get_image().save_png(_screenshots_dir.path_join(name + ".png"))
+	get_viewport().get_texture().get_image().save_png(_screenshots_dir.path_join(file_name + ".png"))
 
 #endregion
 
@@ -186,7 +186,7 @@ func _test_line_edit_geometry() -> void:
 		edit.text = case["text"]
 		await _focus(edit)
 		var length: int = edit.text.length()
-		var columns: Array[int] = [0, length / 3, length / 2, length]
+		var columns: Array[int] = [0, floori(length / 3.0), floori(length / 2.0), length]
 		for column: int in columns:
 			edit.caret_column = column
 			await _frames(2)
@@ -306,8 +306,8 @@ func _test_text_edit_geometry() -> void:
 	tall.custom_minimum_size.y = old_height
 	await _frames(2)
 
-	for name: String in ["TextEdit", "NoWrapTextEdit"]:
-		var edit: TextEdit = _node(name) as TextEdit
+	for node_name: String in ["TextEdit", "NoWrapTextEdit"]:
+		var edit: TextEdit = _node(node_name) as TextEdit
 		await _focus(edit)
 		edit.scroll_vertical = 0
 		var positions: Array[Vector2i] = [Vector2i(0, 0), Vector2i(10, 0), Vector2i(5, 1), Vector2i(3, 2)]
@@ -325,7 +325,7 @@ func _test_text_edit_geometry() -> void:
 			edit.set_caret_column(0)
 			await _frames(1)
 			await _click(_text_point(edit, pos))
-			_check(Vector2i(edit.get_caret_column(), edit.get_caret_line()) == pos, "%s: click on %s -> caret (%d,%d)" % [name, str(pos), edit.get_caret_column(), edit.get_caret_line()])
+			_check(Vector2i(edit.get_caret_column(), edit.get_caret_line()) == pos, "%s: click on %s -> caret (%d,%d)" % [node_name, str(pos), edit.get_caret_column(), edit.get_caret_line()])
 
 func _test_text_edit_caret_drag() -> void:
 	print("\n== TextEdit caret drag")
@@ -608,7 +608,6 @@ func _test_caret_fade() -> void:
 	_check(_caret_alpha(edit) > 0.0, "native caret shown again while the handle is faded")
 	_controller.hide_native_caret = false
 	# A faded handle cannot be grabbed: the press reaches the text control.
-	var tip: Vector2 = _handle(0).get_tip()
 	var pointer: Vector2 = _handle(0).global_position + _handle(0).size * 0.5
 	_mouse_move(pointer)
 	_mouse_button(pointer, true)

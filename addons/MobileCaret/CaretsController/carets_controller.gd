@@ -485,7 +485,8 @@ func _handle_at(point: Vector2) -> caret_indicator:
 func _begin_drag(handle: caret_indicator, pointer: Vector2) -> void:
 	var index: int = _active.handles.find(handle)
 	_drag_handle = handle
-	_drag_caret = index / 2
+	# Handles come in pairs per caret.
+	_drag_caret = index >> 1
 	_drag_press_pointer = pointer
 	_drag_moved = false
 	_drag_grab_offset = handle.get_tip() - pointer

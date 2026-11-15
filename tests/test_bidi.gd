@@ -268,7 +268,6 @@ func _test_line_edit_drag() -> void:
 	edit.deselect()
 	edit.caret_column = 3
 	await _frames(4)
-	var adapter: caret_text_adapter = caret_text_adapter.for_control(edit)
 	_check(_handle(0).visible and _handle(0).get_tip().distance_to(_tip_of(edit, Vector2i(3, 0))) < 1.5, "the handle sits at the caret in Hebrew text")
 	# In right-to-left text a higher column is further LEFT on screen.
 	_check(_tip_of(edit, Vector2i(10, 0)).x < _tip_of(edit, Vector2i(3, 0)).x, "sanity: column 10 is left of column 3")
@@ -488,13 +487,13 @@ func _test_empty_text() -> void:
 	_check(handle.visible and handle.get_tip().distance_to(_tip_of(edit, Vector2i.ZERO)) < 1.5, "after deleting all text the handle is still there")
 
 	# TextEdit, wrapped and not, with a placeholder.
-	for wrap: int in [TextEdit.LINE_WRAPPING_BOUNDARY, TextEdit.LINE_WRAPPING_NONE]:
+	for wrap_mode: int in [TextEdit.LINE_WRAPPING_BOUNDARY, TextEdit.LINE_WRAPPING_NONE]:
 		var text_edit: TextEdit = TextEdit.new()
 		text_edit.position = Vector2(20.0, 300.0)
 		text_edit.size = Vector2(500.0, 160.0)
 		text_edit.add_theme_font_size_override("font_size", 26)
 		text_edit.placeholder_text = "Write text here..."
-		text_edit.wrap_mode = wrap as TextEdit.LineWrappingMode
+		text_edit.wrap_mode = wrap_mode as TextEdit.LineWrappingMode
 		_root.add_child(text_edit)
 		await _frames(3)
 		text_edit.grab_focus()
@@ -503,8 +502,8 @@ func _test_empty_text() -> void:
 		var tip: Vector2 = caret_text_adapter.for_control(text_edit).get_tip_local(Vector2i.ZERO)
 		var text_handle: caret_indicator = _handle(0)
 		var line_height: float = float(text_edit.get_line_height())
-		_check(text_handle.visible, "TextEdit (wrap %d): the handle shows on empty text" % wrap)
-		_check(absf(tip.x - native.x) <= 2.0 and tip.y >= native.y and tip.y <= native.y + line_height + 2.0, "TextEdit (wrap %d): it sits at the caret (tip %s, native %s)" % [wrap, str(tip), str(native)])
-		_check(text_handle.get_tip().distance_to(_tip_of(text_edit, Vector2i.ZERO)) < 1.5, "TextEdit (wrap %d): the handle is placed at that tip" % wrap)
+		_check(text_handle.visible, "TextEdit (wrap_mode %d): the handle shows on empty text" % wrap_mode)
+		_check(absf(tip.x - native.x) <= 2.0 and tip.y >= native.y and tip.y <= native.y + line_height + 2.0, "TextEdit (wrap_mode %d): it sits at the caret (tip %s, native %s)" % [wrap_mode, str(tip), str(native)])
+		_check(text_handle.get_tip().distance_to(_tip_of(text_edit, Vector2i.ZERO)) < 1.5, "TextEdit (wrap_mode %d): the handle is placed at that tip" % wrap_mode)
 		text_edit.queue_free()
 		await _frames(2)

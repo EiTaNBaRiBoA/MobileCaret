@@ -123,10 +123,11 @@ func _test_handles_for_every_caret() -> void:
 	var positions: Array[Vector2i] = [Vector2i(3, 0), Vector2i(5, 1), Vector2i(9, 2)]
 	var ok: bool = true
 	for i: int in 3:
-		var expected: Vector2 = _tip_of(edit, Vector2i(edit.get_caret_column(i), edit.get_caret_line(i)))
-		if not (_handle(i * 2).visible and _handle(i * 2).get_tip().distance_to(expected) < 1.5):
+		var caret: Vector2i = Vector2i(edit.get_caret_column(i), edit.get_caret_line(i))
+		var expected: Vector2 = _tip_of(edit, caret)
+		if caret != positions[i] or not (_handle(i * 2).visible and _handle(i * 2).get_tip().distance_to(expected) < 1.5):
 			ok = false
-	_check(ok, "each handle sits at its own caret")
+	_check(ok, "each handle sits at its own caret, at (3,0), (5,1) and (9,2)")
 	_check(_handle(1).visible == false and _handle(3).visible == false and _handle(5).visible == false, "no end handles without selections")
 
 
