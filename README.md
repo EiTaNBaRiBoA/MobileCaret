@@ -156,6 +156,8 @@ MobileCaretToolbar.add_item(&"insert", "Insert", 0, Callable(), [
 ])
 
 MobileCaretToolbar.item_pressed.connect(func(id, control): print(id))  # every custom press
+MobileCaretToolbar.open_submenu(&"insert")       # open a submenu from code (&"" closes all)
+MobileCaretToolbar.get_open_submenus()          # the open submenus, from the main row down
 MobileCaretToolbar.remove_item(&"bold")
 MobileCaretToolbar.clear_items()
 ```
@@ -166,7 +168,7 @@ MobileCaretToolbar.clear_items()
 | `text` | The label. |
 | `index` | 0 = leftmost, -1 = last. Buttons with the same index keep the order they were added in. |
 | `callback` | Called with the focused control when the button is pressed. |
-| `children` | Dictionaries with the same keys (`id`, `text`, `callback`, `items`, `font`, `icon`). The button then opens a submenu. |
+| `children` | Dictionaries with the same keys (`id`, `text`, `callback`, `items`, `font`, `icon`). The button then opens a submenu. A child with `items` of its own opens a deeper submenu; ‹ goes back one level at a time. |
 | `when` | `"always"` (default), `"selection"` (only while text is selected) or `"caret"` (only without a selection). |
 | `font`, `icon` | An optional font for the label (for example one with special symbols), and an optional `Texture2D` shown before the label (or alone, with an empty label). |
 

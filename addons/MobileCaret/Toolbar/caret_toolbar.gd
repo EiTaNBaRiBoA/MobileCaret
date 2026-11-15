@@ -135,9 +135,10 @@ var _tap_was_showing: bool = false
 var _tap_swallowed: bool = false
 var _tap_event: InputEventMouseButton = null
 var _replaying: bool = false
-# Custom items added with add_item(), and the custom item whose submenu is open (or &"").
+# Custom items added with add_item(), and the open submenus: the ids from the main row down to
+# the one shown (empty when the main row shows). A submenu's items may open submenus too.
 var _custom_items: Array[Dictionary] = []
-var _submenu: StringName = &""
+var _submenu_path: Array[StringName] = []
 
 
 func _ready() -> void:
@@ -177,7 +178,7 @@ func _process(delta: float) -> void:
 		_stable_time = 0.0
 		_dismissed = false
 		_overflow_open = false
-		_submenu = &""
+		_submenu_path.clear()
 		# The bare-caret toolbar goes away as soon as the caret moves or the text changes.
 		if _caret_mode and signature != _caret_signature:
 			_caret_mode = false
@@ -247,16 +248,24 @@ func remove_item(id: StringName) -> void:
 
 func clear_items() -> void:
 	_custom_items.clear()
-	_submenu = &""
+	_submenu_path.clear()
 
 # The custom items added with add_item().
 func get_items() -> Array[Dictionary]:
 	return _custom_items.duplicate()
 
-# Opens the submenu of a custom item (as if it was pressed), or closes it with &"".
+# Opens the submenu of a custom item (as if it was pressed), one level deeper than the one shown.
+# &"" closes all submenus.
 func open_submenu(id: StringName) -> void:
-	_submenu = id
+	if id == &"":
+		_submenu_path.clear()
+	else:
+		_submenu_path.append(id)
 	_overflow_open = false
+
+# The ids of the open submenus, from the main row down (empty when none is open).
+func get_open_submenus() -> Array[StringName]:
+	return _submenu_path.duplicate()
 
 # Rectangle (viewport space) of one button, or an empty Rect2 if it is not shown.
 func get_button_rect(action: StringName) -> Rect2:
@@ -343,7 +352,7 @@ func _validate_focus() -> void:
 
 func _clear_adapter() -> void:
 	_adapter = null
-	_submenu = &""
+	_submenu_path.clear()
 	_caret_mode = false
 	_dismissed = false
 	_overflow_open = false
@@ -460,8 +469,8 @@ func _build_entries() -> Array[Dictionary]:
 			overflow.append(_entry(ACTION_SHARE, text_share))
 
 	var specs: Array[Dictionary] = _custom_specs()
-	if _submenu != &"":
-		var open: Dictionary = _find_spec(_submenu, specs)
+	if not _submenu_path.is_empty():
+		var open: Dictionary = _find_spec(_submenu_path[_submenu_path.size() - 1], specs)
 		var children: Array = open.get("items", []) as Array
 		if not children.is_empty():
 			var page: Array[Dictionary] = [_entry(ITEM_BACK, text_back)]
@@ -469,7 +478,7 @@ func _build_entries() -> Array[Dictionary]:
 				if child is Dictionary:
 					page.append(_custom_entry(child as Dictionary))
 			return page
-		_submenu = &""
+		_submenu_path.clear()
 
 	if _overflow_open and not overflow.is_empty():
 		var menu: Array[Dictionary] = [_entry(ITEM_BACK, text_back)]
@@ -725,8 +734,9 @@ func _perform(action: StringName) -> void:
 			_overflow_open = true
 			return
 		ITEM_BACK:
-			if _submenu != &"":
-				_submenu = &""
+			# One level up: from a submenu to the one it was opened from, or to the main row.
+			if not _submenu_path.is_empty():
+				_submenu_path.pop_back()
 			else:
 				_overflow_open = false
 			return
@@ -760,7 +770,7 @@ func _perform_custom(id: StringName, spec: Dictionary) -> void:
 		open_submenu(id)
 		return
 	var control: Control = _adapter.control
-	_submenu = &""
+	_submenu_path.clear()
 	var callback: Variant = spec.get("callback")
 	if callback is Callable and (callback as Callable).is_valid():
 		(callback as Callable).call(control)

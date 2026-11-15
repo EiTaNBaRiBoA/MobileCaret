@@ -50,6 +50,7 @@ func _ready() -> void:
 	await _test_registered_factory()
 	await _test_toolbar_items()
 	await _test_control_items_and_submenus()
+	await _test_nested_submenus()
 
 	DisplayServer.clipboard_set(_saved_clipboard)
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -386,6 +387,63 @@ func _test_toolbar_items() -> void:
 	await _frames(3)
 	_check(str(_row()) == str([&"paste", &"select_all", &"more"]), "clear_items leaves the built-in buttons (got %s)" % str(_row()))
 	edit.release_focus()
+	await _frames(2)
+
+
+func _test_nested_submenus() -> void:
+	print("\n== Submenus inside submenus")
+	await _reset()
+	var field: CustomField = _field("alpha beta")
+	field.toolbar_items = [
+		{"id": &"insert", "text": "Insert", "index": 0, "items": [
+			{"id": &"insert_frac", "text": "a/b"},
+			{"id": &"symbols", "text": "Symbols", "items": [
+				{"id": &"group_arrows", "text": "→", "items": [
+					{"id": &"sym_to", "text": "→"},
+					{"id": &"sym_implies", "text": "⇒"},
+				]},
+				{"id": &"group_sets", "text": "∈", "items": [
+					{"id": &"sym_in", "text": "∈"},
+				]},
+			]},
+		]},
+	]
+	await _frames(2)
+	field.grab_focus()
+	await _frames(3)
+	field.anchor = 0
+	field.caret = 5
+	await _wait_toolbar(true)
+	await _press_button(&"insert")
+	await _frames(3)
+	await _press_button(&"symbols")
+	await _frames(3)
+	_check(str(_row()) == str([&"back", &"group_arrows", &"group_sets"]), "a submenu item with children opens the next level (got %s)" % str(_row()))
+	await _press_button(&"group_arrows")
+	await _frames(3)
+	_check(str(_row()) == str([&"back", &"sym_to", &"sym_implies"]) and _toolbar.get_open_submenus() == [&"insert", &"symbols", &"group_arrows"], "three levels deep, get_open_submenus lists the path (%s)" % str(_toolbar.get_open_submenus()))
+	await _press_button(&"back")
+	await _frames(3)
+	_check(str(_row()) == str([&"back", &"group_arrows", &"group_sets"]), "‹ goes back one level, to Symbols (got %s)" % str(_row()))
+	await _press_button(&"back")
+	await _frames(3)
+	_check(_row().size() == 3 and _row()[1] == &"insert_frac", "‹ again goes to Insert (got %s)" % str(_row()))
+	await _press_button(&"back")
+	await _frames(3)
+	_check(_row().size() > 0 and _row()[0] == &"insert" and &"copy" in _row(), "and once more to the main row (got %s)" % str(_row()))
+	await _press_button(&"insert")
+	await _frames(3)
+	await _press_button(&"symbols")
+	await _frames(3)
+	await _press_button(&"group_sets")
+	await _frames(3)
+	await _press_button(&"sym_in")
+	_check(field.pressed_items.has(&"sym_in") and _toolbar.get_open_submenus().is_empty(), "pressing a deep item reaches the control and closes all submenus")
+	_toolbar.open_submenu(&"insert")
+	_toolbar.open_submenu(&"symbols")
+	_toolbar.open_submenu(&"")
+	_check(_toolbar.get_open_submenus().is_empty(), "open_submenu(&\"\") closes every level")
+	field.release_focus()
 	await _frames(2)
 
 
