@@ -54,13 +54,9 @@ func get_selection_to(caret_index: int = 0) -> Vector2i:
 	var edit: TextEdit = _edit()
 	return Vector2i(edit.get_selection_to_column(caret_index), edit.get_selection_to_line(caret_index))
 
+# Selecting from a position to itself clears the selection of that caret.
 func select(anchor: Vector2i, caret: Vector2i, caret_index: int = 0) -> void:
 	var edit: TextEdit = _edit()
-	if anchor == caret:
-		# Selecting from a position to itself clears the selection of that caret.
-		edit.select(caret.y, caret.x, caret.y, caret.x, caret_index)
-		set_caret(caret, caret_index)
-		return
 	edit.select(anchor.y, anchor.x, caret.y, caret.x, caret_index)
 	set_caret(caret, caret_index)
 

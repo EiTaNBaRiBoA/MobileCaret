@@ -5,6 +5,8 @@ class_name caret_focus_tracker extends Node
 # Emitted when a control gains GUI focus in any viewport.
 signal focus_changed(control: Control)
 
+# The viewports listened to, by instance id. A viewport is forgotten when it leaves the tree (a
+# formula or plot may make a SubViewport for every picture) and hooked again if it comes back.
 var _hooked: Dictionary = {}
 
 
@@ -18,7 +20,14 @@ func _hook(viewport: Viewport) -> void:
 	if _hooked.has(id):
 		return
 	_hooked[id] = true
-	viewport.gui_focus_changed.connect(_on_gui_focus_changed)
+	if not viewport.gui_focus_changed.is_connected(_on_gui_focus_changed):
+		viewport.gui_focus_changed.connect(_on_gui_focus_changed)
+	viewport.tree_exiting.connect(_unhook.bind(viewport), CONNECT_ONE_SHOT)
+
+func _unhook(viewport: Viewport) -> void:
+	_hooked.erase(viewport.get_instance_id())
+	if viewport.gui_focus_changed.is_connected(_on_gui_focus_changed):
+		viewport.gui_focus_changed.disconnect(_on_gui_focus_changed)
 
 func _on_gui_focus_changed(control: Control) -> void:
 	focus_changed.emit(control)

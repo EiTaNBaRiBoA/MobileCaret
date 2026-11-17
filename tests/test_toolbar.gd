@@ -28,6 +28,7 @@ func _ready() -> void:
 	await _test_tap_on_selection()
 	await _test_rich_text_label()
 	await _test_empty_field()
+	await _test_clipboard_reads()
 	await _test_review_fixes()
 	await _test_physical_size()
 	await _test_without_carets_controller()
@@ -718,6 +719,32 @@ func _test_review_fixes() -> void:
 
 
 # Tapping the handle in an empty field offers Paste.
+# While it shows, the toolbar reads the system clipboard (for Paste) only now and then: on a phone
+# each read is a call to another process. Text copied elsewhere still brings Paste soon.
+func _test_clipboard_reads() -> void:
+	print("\n== Clipboard reads")
+	await _reset()
+	var edit: LineEdit = _line_edit("hello brave world", Vector2(40.0, 300.0))
+	await _select_and_wait(edit, Vector2i(6, 0), Vector2i(11, 0))
+	var reads_before: int = _toolbar._clipboard_reads
+	var started: int = Time.get_ticks_msec()
+	await _frames(30)
+	var reads: int = _toolbar._clipboard_reads - reads_before
+	var allowed: int = (Time.get_ticks_msec() - started) / 500 + 1
+	_check(_toolbar.is_showing() and reads <= allowed, "30 frames with the toolbar showing read the clipboard about twice a second, not every frame (%d reads, %d allowed)" % [reads, allowed])
+	# still read now and then, so text copied in another app is noticed
+	var reads_then: int = _toolbar._clipboard_reads
+	await _frames(45)
+	_check(_toolbar._clipboard_reads > reads_then, "the clipboard is read again while the toolbar stays open")
+	# the next time the toolbar opens it reads the clipboard at once
+	_toolbar.hide_toolbar()
+	await _frames(2)
+	var reads_hidden: int = _toolbar._clipboard_reads
+	edit.select(0, 5)
+	await _wait_toolbar(true)
+	_check(_toolbar._clipboard_reads > reads_hidden, "a toolbar that opens again reads the clipboard at once")
+
+
 func _test_empty_field() -> void:
 	print("\n== Empty field")
 	await _reset()

@@ -39,6 +39,9 @@ const TAP_MOVE_MM: float = 2.0
 const TAP_SECONDS: float = 0.45
 # Seconds between looks for a carets controller to link to.
 const RELINK_INTERVAL: float = 0.5
+# Seconds between looks at the system clipboard while the toolbar shows (for the Paste button). On
+# a phone each look is a call to another process, too slow to make on every frame.
+const CLIPBOARD_CHECK_SECONDS: float = 0.5
 
 # Master switch. When false the toolbar is hidden and never shows.
 @export var enabled: bool = true:
@@ -139,6 +142,12 @@ var _replaying: bool = false
 # the one shown (empty when the main row shows). A submenu's items may open submenus too.
 var _custom_items: Array[Dictionary] = []
 var _submenu_path: Array[StringName] = []
+# Whether the system clipboard has text, as last read (see _clipboard_has), and how long ago.
+var _clipboard_known: bool = false
+var _clipboard_full: bool = false
+var _clipboard_age: float = 0.0
+# How many times the system clipboard was read (for the tests).
+var _clipboard_reads: int = 0
 
 
 func _ready() -> void:
@@ -188,8 +197,11 @@ func _process(delta: float) -> void:
 
 	var wanted: bool = (_adapter.has_any_selection() or _caret_mode) and not _dismissed and _stable_time >= show_delay
 	if not wanted:
+		# Read the clipboard afresh the next time the toolbar shows.
+		_clipboard_known = false
 		_hide_panels()
 		return
+	_clipboard_age += delta
 	if not _rebuild_items():
 		_hide_panels()
 		return
@@ -461,7 +473,7 @@ func _build_entries() -> Array[Dictionary]:
 		main_row.append(_entry(ACTION_CUT, text_cut))
 	if show_copy and copyable:
 		main_row.append(_entry(ACTION_COPY, text_copy))
-	if show_paste and editable and DisplayServer.clipboard_has():
+	if show_paste and editable and _clipboard_has():
 		main_row.append(_entry(ACTION_PASTE, text_paste))
 	if show_select_all and not _adapter.is_empty() and not _is_everything_selected():
 		main_row.append(_entry(ACTION_SELECT_ALL, text_select_all))
@@ -506,6 +518,16 @@ func _build_entries() -> Array[Dictionary]:
 	if not overflow.is_empty():
 		main_row.append(_entry(ITEM_MORE, text_more))
 	return main_row
+
+# Whether the system clipboard has text: read when the toolbar shows, then at most every
+# CLIPBOARD_CHECK_SECONDS (so text copied in another app shows Paste within that time).
+func _clipboard_has() -> bool:
+	if not _clipboard_known or _clipboard_age >= CLIPBOARD_CHECK_SECONDS:
+		_clipboard_full = DisplayServer.clipboard_has()
+		_clipboard_known = true
+		_clipboard_age = 0.0
+		_clipboard_reads += 1
+	return _clipboard_full
 
 static func _sort_index(spec: Dictionary) -> int:
 	var index: int = int(spec.get("index", -1))
@@ -768,6 +790,8 @@ func _perform(action: StringName) -> void:
 			if not _adapter.is_secret():
 				share_requested.emit(_adapter.get_selected_text())
 			_overflow_open = false
+	# Cut, Copy and the control's own actions may have changed the clipboard.
+	_clipboard_known = false
 	_stable_time = 0.0
 	action_pressed.emit(action)
 
@@ -783,6 +807,7 @@ func _perform_custom(id: StringName, spec: Dictionary) -> void:
 		(callback as Callable).call(control)
 	if _adapter != null and _adapter.is_valid():
 		_adapter.toolbar_item_pressed(id)
+	_clipboard_known = false
 	_stable_time = 0.0
 	item_pressed.emit(id, control)
 	action_pressed.emit(id)

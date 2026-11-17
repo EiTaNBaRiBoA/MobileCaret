@@ -24,6 +24,7 @@ func _ready() -> void:
 	await _test_sub_viewport(1.5)
 	await _test_embedded_window()
 	await _test_native_window()
+	await _test_tracker_forgets_viewports()
 	DisplayServer.clipboard_set(_saved_clipboard)
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	_controller.handle_size_mm = saved_mm
@@ -150,6 +151,44 @@ func _check_controls_in(viewport: Viewport, edit: LineEdit, text_edit: TextEdit,
 	_check(text_edit.get_caret_line() == 1 and text_edit.get_caret_column() == 6, "%s: dragging works in the TextEdit (got %d,%d)" % [label, text_edit.get_caret_column(), text_edit.get_caret_line()])
 
 #endregion
+
+
+# Every formula picture may make a SubViewport: the focus tracker must not keep one entry per
+# viewport that ever existed, and a viewport taken out of the tree and put back is still followed.
+func _test_tracker_forgets_viewports() -> void:
+	print("\n== Focus tracker and short-lived viewports")
+	await _reset()
+	var tracker: caret_focus_tracker = _controller.get_node("FocusTracker") as caret_focus_tracker
+	var before: int = tracker._hooked.size()
+	for i: int in 40:
+		var sub: SubViewport = SubViewport.new()
+		_root.add_child(sub)
+		sub.queue_free()
+	await _frames(3)
+	_check(tracker._hooked.size() == before, "freed viewports are forgotten (%d tracked before, %d after 40 came and went)" % [before, tracker._hooked.size()])
+	var container: SubViewportContainer = SubViewportContainer.new()
+	container.size = Vector2(300.0, 100.0)
+	_root.add_child(container)
+	var sub: SubViewport = SubViewport.new()
+	sub.size = Vector2i(300, 100)
+	container.add_child(sub)
+	var edit: LineEdit = LineEdit.new()
+	edit.size = Vector2(200.0, 40.0)
+	sub.add_child(edit)
+	await _frames(2)
+	_root.remove_child(container)
+	await _frames(1)
+	_root.add_child(container)
+	await _frames(1)
+	var seen: Array[Control] = []
+	var listen: Callable = func(control: Control) -> void: seen.append(control)
+	tracker.focus_changed.connect(listen)
+	edit.grab_focus()
+	await _frames(1)
+	tracker.focus_changed.disconnect(listen)
+	_check(seen.size() == 1 and seen[0] == edit, "a viewport put back into the tree still reports its focus, once (%d reports)" % seen.size())
+	edit.release_focus()
+	await _frames(1)
 
 
 func _test_sub_viewport(container_scale: float) -> void:

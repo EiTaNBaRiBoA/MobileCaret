@@ -195,7 +195,15 @@ func _test_per_caret_selection() -> void:
 	await _frames(1)
 	_mouse_button(center, false)
 	await _frames(2)
-	_check(DisplayServer.clipboard_get() == edit.get_selected_text(selected) and not DisplayServer.clipboard_get().is_empty(), "Copy copies the selection ('%s')" % DisplayServer.clipboard_get())
+	# The system clipboard can lag behind a copy for a moment on Windows: wait for it (one read per
+	# frame), then check what it holds.
+	var copied: String = DisplayServer.clipboard_get()
+	for i: int in 20:
+		if copied == edit.get_selected_text(selected):
+			break
+		await _frames(1)
+		copied = DisplayServer.clipboard_get()
+	_check(copied == edit.get_selected_text(selected) and not copied.is_empty(), "Copy copies the selection ('%s')" % copied)
 
 
 func _test_carets_merging_while_dragging() -> void:
