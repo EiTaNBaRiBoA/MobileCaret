@@ -205,6 +205,7 @@ The delegate has any of the methods below, with the same names and parameters as
 | `has_selection()`, `get_selection_from()`, `get_selection_to()`, `select(anchor, caret)`, `deselect()` | Selection handles and the toolbar | No selection |
 | `select_word_at(pos)` | Long press | Nothing |
 | `get_drag_target(point, current, delta)`, `get_row_x_extent(y)` | Edge scrolling and clamping while dragging | `get_pos_at_local`, the base adapter's version |
+| `get_drag_rect()` | Where a dragged handle may go, in the control's coordinates. A control whose text goes on outside its own rectangle (a selection over several paragraphs of a page) returns that larger area | The control's own rectangle |
 | `get_caret_count()`, `merge_carets()` | Several carets | 1, nothing |
 | `supports_handles()` | `false` for a toolbar-only control (like a selectable label) | `true` |
 | `is_usable()` | `false` to switch MobileCaret off for the control for now | `true` |

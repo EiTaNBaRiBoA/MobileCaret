@@ -200,6 +200,11 @@ func is_pos_rtl(_pos: Vector2i) -> bool:
 func get_pos_at_local(_local: Vector2) -> Vector2i:
 	return Vector2i.ZERO
 
+# Where a dragged handle may go, in the control's coordinates: the control itself. A control whose
+# text continues outside its own rectangle (a selection over several paragraphs) gives that area.
+func get_drag_rect() -> Rect2:
+	return Rect2(Vector2.ZERO, control.size)
+
 # Horizontal extent (local x) of the text on the row at `local_y`: from the first to the last
 # caret position of that row. A side whose end is scrolled out of view is -INF / INF.
 func get_row_x_extent(local_y: float) -> Vector2:

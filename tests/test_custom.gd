@@ -36,6 +36,56 @@ class PanelAdapter extends caret_text_adapter:
 		return Vector2i(clampi(roundi((local.x - 10.0) / 20.0), 0, 10), 0)
 
 
+# A control whose second row is drawn below its own rectangle (as a selection that continues into
+# the next paragraph of a page). With `tall` the delegate says so through get_drag_rect().
+class TallBox extends Control:
+	var tall: bool = true
+	var _delegate: TallDelegate = null
+
+	func _init() -> void:
+		focus_mode = Control.FOCUS_ALL
+		_delegate = TallDelegate.new(self)
+
+	func _get_caret_delegate() -> Object:
+		return _delegate
+
+	# Where row 1 is drawn: this far below the control's bottom.
+	func row_y(line: int) -> float:
+		return 40.0 + line * (size.y + 100.0)
+
+
+class TallDelegate extends RefCounted:
+	var box: TallBox
+	var caret: Vector2i = Vector2i(2, 0)
+
+	func _init(owner_box: TallBox) -> void:
+		box = owner_box
+
+	func get_caret() -> Vector2i:
+		return caret
+
+	func set_caret(pos: Vector2i) -> void:
+		caret = pos
+
+	func get_tip_local(pos: Vector2i) -> Vector2:
+		return Vector2(10.0 + pos.x * 20.0, box.row_y(pos.y))
+
+	func is_pos_visible(_pos: Vector2i) -> bool:
+		return true
+
+	func get_line_height() -> float:
+		return 30.0
+
+	func get_pos_at_local(local: Vector2) -> Vector2i:
+		var line: int = 1 if local.y > box.size.y + 30.0 else 0
+		return Vector2i(clampi(roundi((local.x - 10.0) / 20.0), 0, 10), line)
+
+	func get_drag_rect() -> Rect2:
+		if box.tall:
+			return Rect2(0.0, 0.0, box.size.x, box.row_y(1) + 20.0)
+		return Rect2(Vector2.ZERO, box.size)
+
+
 func _ready() -> void:
 	_controller = get_node("/root/MobileCaret") as carets_controller
 	_toolbar = get_node("/root/MobileCaretToolbar") as caret_toolbar
@@ -51,6 +101,7 @@ func _ready() -> void:
 	await _test_toolbar_items()
 	await _test_control_items_and_submenus()
 	await _test_nested_submenus()
+	await _test_drag_rect()
 
 	DisplayServer.clipboard_set(_saved_clipboard)
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -492,3 +543,42 @@ func _test_control_items_and_submenus() -> void:
 	_check(icon_rect.size.x > 10.0, "an icon-only item gets room for its icon (width %.1f)" % icon_rect.size.x)
 	field.release_focus()
 	await _frames(2)
+
+
+# A dragged handle stays inside the control, or inside the area the delegate's get_drag_rect()
+# gives: there it can follow the caret to a row drawn below the control.
+func _test_drag_rect() -> void:
+	print("\n== A delegate's drag area (get_drag_rect)")
+	await _reset()
+	for tall: bool in [true, false]:
+		var box: TallBox = TallBox.new()
+		box.tall = tall
+		box.position = Vector2(40.0, 200.0)
+		box.size = Vector2(300.0, 80.0)
+		_root.add_child(box)
+		await _frames(2)
+		box.grab_focus()
+		await _frames(4)
+		var handle: caret_indicator = _handle(0)
+		_check(handle.visible, "the caret handle shows (tall %s)" % tall)
+		var start_pointer: Vector2 = handle.global_position + handle.size * 0.5
+		var row_one: Vector2 = box.get_global_transform_with_canvas() * box._delegate.get_tip_local(Vector2i(2, 1))
+		var delta: Vector2 = row_one - handle.get_tip()
+		_mouse_move(start_pointer)
+		_mouse_button(start_pointer, true)
+		await _frames(1)
+		for i: int in range(1, 7):
+			_mouse_move(start_pointer + delta * (float(i) / 6.0))
+			await _frames(1)
+		await _frames(3)
+		var tip_y: float = handle.get_tip().y
+		var bottom: float = box.get_global_rect().end.y
+		if tall:
+			_check(box._delegate.caret.y == 1 and absf(tip_y - row_one.y) < 1.5, "with get_drag_rect the dragged handle reaches the row below the control (%.0f, row at %.0f)" % [tip_y, row_one.y])
+		else:
+			_check(tip_y <= bottom + 0.5, "without it the dragged handle stays inside the control (%.0f, bottom %.0f)" % [tip_y, bottom])
+		_mouse_button(start_pointer + delta, false)
+		await _frames(2)
+		box.release_focus()
+		box.queue_free()
+		await _frames(2)

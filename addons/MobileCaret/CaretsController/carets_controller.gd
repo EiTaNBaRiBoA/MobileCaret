@@ -324,8 +324,9 @@ func _update_handles() -> void:
 
 # Positions a handle at a text position, hiding it if that position is scrolled out of view.
 # A dragged handle (`dragging`) is never hidden: it follows the finger horizontally while the
-# caret itself snaps to characters (like Android), and it stays inside the control vertically,
-# following the finger while the caret row is scrolled or clipped at an edge.
+# caret itself snaps to characters (like Android), and it stays inside the control (or the area
+# the adapter's get_drag_rect gives) vertically, following the finger while the caret row is
+# scrolled or clipped at an edge.
 func _place(handle: caret_indicator, pos: Vector2i, handle_style: caret_indicator.Style, dragging: bool = false) -> void:
 	var pos_visible: bool = _adapter.is_pos_visible(pos)
 	if not dragging and (not pos_visible or _adapter.is_pos_clipped(pos)):
@@ -338,7 +339,8 @@ func _place(handle: caret_indicator, pos: Vector2i, handle_style: caret_indicato
 		tip = _adapter.control.get_global_transform_with_canvas() * _adapter.get_tip_local(pos)
 		tip += caret_texture_offset
 	if dragging:
-		var bounds: Rect2 = _adapter.control.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, _adapter.control.size)
+		# The control, or the area its text spans (the adapter's get_drag_rect).
+		var bounds: Rect2 = _adapter.control.get_global_transform_with_canvas() * _adapter.get_drag_rect()
 		# Follow the finger sideways, but never past the end of the text on this row (or the control).
 		var to_viewport: Transform2D = _adapter.control.get_global_transform_with_canvas()
 		var low: float = bounds.position.x

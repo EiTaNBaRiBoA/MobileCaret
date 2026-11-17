@@ -120,6 +120,11 @@ func get_row_x_extent(local_y: float) -> Vector2:
 		return _forward(&"get_row_x_extent", [local_y], Vector2(-INF, INF)) as Vector2
 	return super(local_y)
 
+func get_drag_rect() -> Rect2:
+	if has(&"get_drag_rect"):
+		return _forward(&"get_drag_rect", [], Rect2(Vector2.ZERO, control.size)) as Rect2
+	return super()
+
 func get_drag_target(local: Vector2, current: Vector2i, delta: float) -> Vector2i:
 	if has(&"get_drag_target"):
 		return _forward(&"get_drag_target", [local, current, delta], current) as Vector2i
