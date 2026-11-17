@@ -85,6 +85,10 @@ class TallDelegate extends RefCounted:
 			return Rect2(0.0, 0.0, box.size.x, box.row_y(1) + 20.0)
 		return Rect2(Vector2.ZERO, box.size)
 
+	# The row below is drawn by another control, which no parent of the box clips.
+	func is_pos_clipped(pos: Vector2i) -> bool:
+		return not box.tall and pos.y > 0
+
 
 func _ready() -> void:
 	_controller = get_node("/root/MobileCaret") as carets_controller
@@ -553,9 +557,14 @@ func _test_drag_rect() -> void:
 	for tall: bool in [true, false]:
 		var box: TallBox = TallBox.new()
 		box.tall = tall
-		box.position = Vector2(40.0, 200.0)
+		# inside a parent that clips it (as a RichTextLabel clips what is laid over it)
+		var clip: Control = Control.new()
+		clip.clip_contents = true
+		clip.position = Vector2(40.0, 200.0)
+		clip.size = Vector2(300.0, 80.0)
+		_root.add_child(clip)
 		box.size = Vector2(300.0, 80.0)
-		_root.add_child(box)
+		clip.add_child(box)
 		await _frames(2)
 		box.grab_focus()
 		await _frames(4)
@@ -579,6 +588,9 @@ func _test_drag_rect() -> void:
 			_check(tip_y <= bottom + 0.5, "without it the dragged handle stays inside the control (%.0f, bottom %.0f)" % [tip_y, bottom])
 		_mouse_button(start_pointer + delta, false)
 		await _frames(2)
+		if tall:
+			# a clipping parent would hide it there; the delegate's is_pos_clipped() says it is seen
+			_check(handle.visible and absf(handle.get_tip().y - row_one.y) < 1.5, "after the drag the handle stays on the row below, though a parent clips the control (visible %s)" % handle.visible)
 		box.release_focus()
-		box.queue_free()
+		box.get_parent().queue_free()
 		await _frames(2)

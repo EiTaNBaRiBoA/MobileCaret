@@ -202,6 +202,7 @@ The delegate has any of the methods below, with the same names and parameters as
 | `get_line_height()` | Handle and toolbar placement | 16 |
 | `is_pos_rtl(pos)` | Which way the selection handles lean: in a right-to-left line the upper handle leans right | `false` |
 | `is_pos_visible(pos)` | Hiding handles that are scrolled away | The tip is inside the control |
+| `is_pos_clipped(pos)` | Hiding handles that a clipping parent (a `ScrollContainer`) hides. A control whose text goes on outside its own rectangle answers it for that text | The tip is outside a clipping parent of the control |
 | `has_selection()`, `get_selection_from()`, `get_selection_to()`, `select(anchor, caret)`, `deselect()` | Selection handles and the toolbar | No selection |
 | `select_word_at(pos)` | Long press | Nothing |
 | `get_drag_target(point, current, delta)`, `get_row_x_extent(y)` | Edge scrolling and clamping while dragging | `get_pos_at_local`, the base adapter's version |

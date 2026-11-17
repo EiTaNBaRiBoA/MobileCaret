@@ -106,6 +106,14 @@ func is_pos_visible(pos: Vector2i) -> bool:
 	var tip: Vector2 = get_tip_local(pos)
 	return Rect2(Vector2.ZERO, control.size).grow(1.0).has_point(tip - Vector2(0.0, get_line_height() * 0.5))
 
+# A control whose text goes on outside its own rectangle (into the next paragraphs of a page) can
+# say itself whether a position is hidden by a parent that clips: the clipping parents of the
+# control alone do not tell, since that text is drawn elsewhere.
+func is_pos_clipped(pos: Vector2i) -> bool:
+	if has(&"is_pos_clipped"):
+		return bool(_forward(&"is_pos_clipped", [pos], false))
+	return super(pos)
+
 func get_line_height() -> float:
 	return float(_forward(&"get_line_height", [], 16.0))
 
