@@ -13,6 +13,10 @@ var _saved_clipboard: String = ""
 
 func _ready() -> void:
 	_controller = get_node("/root/MobileCaret") as carets_controller
+	# These checks are about keeping the physical size across viewports: use a size well above the
+	# 16 px floor that a small handle hits on a 96 dpi desktop screen.
+	var saved_mm: Vector2 = _controller.handle_size_mm
+	_controller.handle_size_mm = Vector2(7.0, 8.0)
 	_toolbar = get_node("/root/MobileCaretToolbar") as caret_toolbar
 	_saved_clipboard = DisplayServer.clipboard_get()
 	await _frames(2)
@@ -22,6 +26,7 @@ func _ready() -> void:
 	await _test_native_window()
 	DisplayServer.clipboard_set(_saved_clipboard)
 	print("\n%d checks, %d failures" % [_checks, _failures])
+	_controller.handle_size_mm = saved_mm
 	get_tree().quit(1 if _failures > 0 else 0)
 
 

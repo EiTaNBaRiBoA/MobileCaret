@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://drn0vrtfhsgwp"]
 
-[ext_resource type="Script" uid="uid://wm6yoyyhemvy" path="res://MobileCaret/addons/MobileCaret/CaretsController/carets_controller.gd" id="1_s61ly"]
+[ext_resource type="Script" uid="uid://wm6yoyyhemvy" path="res://addons/MobileCaret/CaretsController/carets_controller.gd" id="1_s61ly"]
 
 [node name="carets_controller" type="CanvasLayer"]
 layer = 128

@@ -23,7 +23,8 @@ signal handle_tapped(control: Control)
 # Physical size of a handle in millimeters. The handle keeps this size on screen whatever the
 # resolution, aspect ratio, stretch mode or DPI, so it stays easy to grab. Set to (0, 0) to use
 # `handle_size` (logical pixels) instead.
-@export var handle_size_mm: Vector2 = Vector2(7.0, 8.0)
+# The default is close to the platform text handles (Android draws them about 3.5 mm wide).
+@export var handle_size_mm: Vector2 = Vector2(4.4, 5.0)
 # Size of a handle in logical pixels. Used when `handle_size_mm` is (0, 0); otherwise it is
 # only the reference that `hit_margin` is relative to.
 @export var handle_size: Vector2 = Vector2(48.0, 56.0)
@@ -31,6 +32,9 @@ signal handle_tapped(control: Control)
 # Extra pixels around a handle that still count as touching it (at `handle_size`; scaled together
 # with the handle when `handle_size_mm` is used).
 @export var hit_margin: float = 8.0
+# The smallest area a handle can be grabbed in, in millimeters (wider than a small handle, so it
+# stays easy to grab; 7 mm is about the platforms' 48 dp touch target).
+@export var min_touch_mm: float = 7.0
 # Seconds a press must be held (without moving) to select a word. 0 disables long-press.
 @export var long_press_seconds: float = 0.5
 # Hide Godot's own thin caret whenever a handle is showing (pure Android look).
@@ -471,11 +475,20 @@ func _keeps_focus(node: Node, viewport: Viewport, point: Vector2, focused: Contr
 #endregion
 
 # The visible handle under a viewport-space point (the closest one if several overlap).
+# The grab margin around a handle: `hit_margin` (scaled with the handle), widened when needed so
+# the whole area is at least `min_touch_mm` across.
+func _hit_margin_for(handle: caret_indicator) -> float:
+	var margin: float = hit_margin * _active.ui_scale
+	if min_touch_mm > 0.0 and _active.viewport != null:
+		var touch: float = caret_screen.mm_to_logical(_active.viewport, min_touch_mm)
+		margin = maxf(margin, (touch - minf(handle.size.x, handle.size.y)) * 0.5)
+	return margin
+
 func _handle_at(point: Vector2) -> caret_indicator:
 	var best: caret_indicator = null
 	var best_distance: float = INF
 	for handle: caret_indicator in _active.handles:
-		if handle.hits(point, hit_margin * _active.ui_scale):
+		if handle.hits(point, _hit_margin_for(handle)):
 			var distance: float = handle.get_tip().distance_to(point)
 			if distance < best_distance:
 				best = handle

@@ -67,11 +67,12 @@ Select the `MobileCaret` autoload (or `carets_controller` node) and adjust its e
 | Property | Description |
 | --- | --- |
 | `texture_caret` | Optional custom handle texture. Leave empty for the default teardrop. |
-| `handle_size_mm` | Physical size of a handle in millimeters (default 7 × 8). The handle keeps this size on screen whatever the resolution, aspect ratio, stretch mode or screen DPI, and the hit margin, drag threshold and edge-scroll zones scale with it. Set to `(0, 0)` to use `handle_size` instead. |
+| `handle_size_mm` | Physical size of a handle in millimeters (default 4.4 × 5, close to the platform handles). The handle keeps this size on screen whatever the resolution, aspect ratio, stretch mode or screen DPI, and the hit margin, drag threshold and edge-scroll zones scale with it. Set to `(0, 0)` to use `handle_size` instead. |
 | `handle_size` | Size of a handle in logical pixels. Used when `handle_size_mm` is `(0, 0)`. |
 | `handle_color` | Color of the default teardrop. |
 | `caret_texture_offset` | Extra offset applied to the handles. |
 | `hit_margin` | Extra pixels around a handle that still count as touching it. |
+| `min_touch_mm` | The smallest area a handle can be grabbed in, in millimeters (default 7, about the platforms' 48 dp touch target). A small handle gets a wider grab margin. |
 
 #### Gestures
 
@@ -136,7 +137,7 @@ MobileCaretToolbar.share_requested.connect(func(text): print("share: ", text))
 | `show_overflow`, `show_undo`, `show_redo`, `show_share` | The overflow menu and its entries (Share is off by default). |
 | `text_undo`, `text_redo`, `text_share`, `text_more`, `text_back` | Labels for the overflow menu. |
 | `tap_selection_toggles_toolbar` | Tapping inside a selection keeps it and toggles the toolbar (default on). Turn off to let such taps collapse the selection as usual. |
-| `height_mm` | Height of the bar in millimeters (default 9). Like the handles it keeps this physical size on any screen. |
+| `height_mm` | Height of the bar in millimeters (default 7.5, like the platform text toolbar). Like the handles it keeps this physical size on any screen. |
 | `gap_mm` | Gap between the bar and the selection. |
 | `background_color`, `text_color`, `pressed_color` | Colors. |
 | `show_delay` | Seconds the selection must stay unchanged before the toolbar shows (default 0.2). |

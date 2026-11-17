@@ -82,7 +82,7 @@ const RELINK_INTERVAL: float = 0.5
 # Height of the bar in millimeters. Like the caret handles, it keeps this physical size on screen
 # whatever the resolution, aspect ratio, stretch mode or DPI (it only shrinks when it would not
 # fit the width of a small viewport).
-@export var height_mm: float = 9.0
+@export var height_mm: float = 7.5
 # Gap between the toolbar and the selection, in millimeters.
 @export var gap_mm: float = 2.0
 @export var background_color: Color = Color(0.13, 0.14, 0.17, 0.97)

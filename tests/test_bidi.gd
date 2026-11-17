@@ -367,6 +367,17 @@ func _test_text_edit_caret_positions() -> void:
 	edit.layout_direction = Control.LAYOUT_DIRECTION_RTL
 	await _frames(3)
 	await _check_text_edit_positions(edit, "wrapped, layout direction RTL")
+	# Auto direction decides per line: a line that starts with Latin ("NRZ:") stays left-to-right on
+	# its wrapped Hebrew rows too (the handles were placed as if each row decided on its own).
+	var saved_text: String = edit.text
+	edit.text_direction = Control.TEXT_DIRECTION_AUTO
+	edit.text = "NRZ: %s %s
+%s" % [LONG_HEBREW, HEBREW, LONG_HEBREW]
+	await _frames(3)
+	await _check_text_edit_positions(edit, "auto direction, a Latin start, wrapped Hebrew rows")
+	edit.text_direction = Control.TEXT_DIRECTION_INHERITED
+	edit.text = saved_text
+	await _frames(2)
 	edit.layout_direction = Control.LAYOUT_DIRECTION_LTR
 	# A long text makes the vertical scrollbar appear.
 	var lines: PackedStringArray = []

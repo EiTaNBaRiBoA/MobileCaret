@@ -370,6 +370,17 @@ func _test_physical_handle_size() -> void:
 	await _frames(3)
 	_check(big.x > _handle(0).size.x * 1.9, "doubling handle_size_mm doubles the handle (%s vs %s)" % [str(big), str(_handle(0).size)])
 	_controller.handle_size_mm = saved_mm
+	# A small handle is still grabbed in an area of min_touch_mm (the default handle is small).
+	_controller.handle_size_mm = Vector2(3.0, 3.5)
+	await _frames(3)
+	var touch: float = caret_screen.mm_to_logical(get_viewport(), _controller.min_touch_mm)
+	var small: caret_indicator = _handle(0)
+	var side: Vector2 = small.get_global_rect().get_center() + Vector2(touch * 0.5 - 1.0, 0.0)
+	_check(small.size.x < touch, "the test handle is smaller than the touch area (%.1f < %.1f)" % [small.size.x, touch])
+	_check(_controller._handle_at(side) == small, "a small handle is grabbed up to min_touch_mm / 2 from its middle")
+	_check(_controller._handle_at(small.get_global_rect().get_center() + Vector2(touch, 0.0)) == null, "but not much farther")
+	_controller.handle_size_mm = saved_mm
+
 
 	# Appearance changes at runtime take effect.
 	var saved_color: Color = _controller.handle_color

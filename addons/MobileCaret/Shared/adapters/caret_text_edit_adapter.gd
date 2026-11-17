@@ -174,6 +174,10 @@ func _bidi_caret_x(pos: Vector2i) -> float:
 	var direction: int = _text_direction()
 	if direction != TextServer.DIRECTION_RTL and not _has_rtl_text(line_text):
 		return NAN
+	# "Auto" is decided once per line (by its first strong letter), as the TextEdit shapes it, not
+	# per wrapped row: a line that starts with "NRZ:" stays left-to-right on its Hebrew rows too.
+	if direction == TextServer.DIRECTION_AUTO:
+		direction = _line_direction(line_text)
 	# The visual row that holds the caret, and the column where that row starts.
 	var rows: PackedStringArray = edit.get_line_wrapped_text(pos.y)
 	var row_index: int = clampi(edit.get_line_wrap_index_at_column(pos.y, pos.x), 0, rows.size() - 1)
@@ -222,6 +226,16 @@ func _text_direction() -> int:
 		Control.TEXT_DIRECTION_AUTO:
 			return TextServer.DIRECTION_AUTO
 	return TextServer.DIRECTION_RTL if edit.is_layout_rtl() else TextServer.DIRECTION_LTR
+
+# The direction "auto" resolves to for a whole line (its first strong letter decides).
+func _line_direction(line_text: String) -> int:
+	var edit: TextEdit = _edit()
+	var line: TextLine = TextLine.new()
+	line.direction = TextServer.DIRECTION_AUTO
+	line.add_string(line_text, edit.get_theme_font("font"), edit.get_theme_font_size("font_size"), edit.language)
+	# the direction is inferred when the line is shaped, so shape it first
+	TextServerManager.get_primary_interface().shaped_text_shape(line.get_rid())
+	return line.get_inferred_direction()
 
 # Shapes one visual row like the TextEdit does (cached).
 func _shape_row(row_text: String, direction: int) -> TextLine:
