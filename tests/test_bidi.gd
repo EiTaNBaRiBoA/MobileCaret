@@ -6,6 +6,7 @@ const HEBREW: String = "שלום עולם זה טקסט"
 const ARABIC: String = "مرحبا بالعالم هذا نص"
 const MIXED: String = "Hello שלום world عالم 123 end"
 const LONG_HEBREW: String = "שלום עולם זה טקסט ארוך מאוד כדי לבדוק גלילה של שדה הטקסט הזה כשהוא ארוך יותר מהרוחב"
+const MIXED_PARAGRAPH: String = "הרעיון בקצרה. ב-NRZI (מעבר מתח על 1, ואין מעבר על 0) רצף של אפסים לא יוצר מעברים. 4B/5B מחליף כל 4 סיביות מידע במילת קוד של 5 סיביות מתוך טבלה קבועה, ואת התוצאה משדרים ב-NRZI."
 
 var _failures: int = 0
 var _checks: int = 0
@@ -27,6 +28,7 @@ func _ready() -> void:
 	await _test_text_edit_caret_positions()
 	await _test_text_edit_scrolled_and_gutters()
 	await _test_text_edit_handles()
+	await _test_text_edit_rtl_hit_and_lean()
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
 
@@ -457,6 +459,122 @@ func _test_text_edit_handles() -> void:
 	_check(_handle(0).get_tip().distance_to(_tip_of(edit, Vector2i(2, 0))) < 1.5 and _handle(1).get_tip().distance_to(_tip_of(edit, Vector2i(9, 0))) < 1.5, "the selection handles sit at both ends")
 	await _drag_handle_to(_handle(1), _tip_of(edit, Vector2i(5, 1)))
 	_check(edit.get_selection_from_line() == 0 and edit.get_selection_from_column() == 2 and edit.get_selection_to_line() == 1 and edit.get_selection_to_column() == 5, "dragging the end handle extends across lines to (2,0)..(5,1) (got (%d,%d)..(%d,%d))" % [edit.get_selection_from_column(), edit.get_selection_from_line(), edit.get_selection_to_column(), edit.get_selection_to_line()])
+
+
+# Mixed Hebrew and Latin text that wraps (the case of a study app's paragraph): a point on the text
+# maps back to the position drawn there, so a dragged handle selects up to the finger; and the
+# selection handles lean away from the selection (in right-to-left text the start is at the right).
+func _test_text_edit_rtl_hit_and_lean() -> void:
+	print("\n== TextEdit: mixed right-to-left rows: drag hit test and handle lean")
+	await _reset()
+	var edit: TextEdit = TextEdit.new()
+	edit.position = Vector2(20.0, 100.0)
+	edit.size = Vector2(560.0, 420.0)
+	edit.add_theme_font_size_override("font_size", 28)
+	edit.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	edit.text_direction = Control.TEXT_DIRECTION_RTL
+	edit.text = MIXED_PARAGRAPH
+	_root.add_child(edit)
+	await _frames(3)
+	await _focus(edit)
+	var adapter: caret_text_edit_adapter = caret_text_adapter.for_control(edit) as caret_text_edit_adapter
+	_check(edit.get_line_wrap_count(0) >= 2, "the paragraph wraps (%d rows)" % (edit.get_line_wrap_count(0) + 1))
+	var checked: int = 0
+	var wrong: int = 0
+	var first_wrong: String = ""
+	var half: float = adapter.get_line_height() * 0.5
+	for column: int in range(1, edit.get_line(0).length()):
+		var pos: Vector2i = Vector2i(column, 0)
+		if not adapter.is_pos_visible(pos):
+			continue
+		var tip: Vector2 = adapter.get_tip_local(pos)
+		var alternative: float = adapter.last_alternative_x
+		var back: Vector2i = adapter.get_pos_at_local(tip - Vector2(0.0, half))
+		var back_tip: Vector2 = adapter.get_tip_local(back)
+		var back_alternative: float = adapter.last_alternative_x
+		checked += 1
+		var same_row: bool = absf(back_tip.y - tip.y) < 2.0
+		var xs: Array = [back_tip.x, back_alternative]
+		var near: bool = false
+		for x: Variant in xs:
+			if not is_nan(float(x)) and (absf(float(x) - tip.x) <= 3.0 or (not is_nan(alternative) and absf(float(x) - alternative) <= 3.0)):
+				near = true
+		if not (same_row and near):
+			wrong += 1
+			if first_wrong.is_empty():
+				first_wrong = " (first: column %d at %s maps to %s at %s)" % [column, str(tip), str(back), str(back_tip)]
+	_check(checked > 40 and wrong == 0, "a point on a mixed right-to-left row maps back to the position drawn there: %d of %d%s" % [checked - wrong, checked, first_wrong])
+	# Past the ends of a row (where a finger goes to select to the start or the end of a row): the
+	# position is the one at that end of the text, on that row.
+	var edge_wrong: String = ""
+	# Rows as drawn: the tips grouped by their height (what the learner sees).
+	var by_y: Dictionary = {}
+	for column: int in edit.get_line(0).length() + 1:
+		var tip_c: Vector2 = adapter.get_tip_local(Vector2i(column, 0))
+		var key: int = int(round(tip_c.y))
+		if not by_y.has(key):
+			by_y[key] = []
+		by_y[key].append(tip_c)
+	var row_tips: Array = []
+	var ys: Array = by_y.keys()
+	ys.sort()
+	for key: Variant in ys:
+		row_tips.append(by_y[key])
+	var rows: int = row_tips.size()
+	for r: int in rows:
+		if row_tips[r].is_empty():
+			continue
+		var y: float = (row_tips[r][0] as Vector2).y - half
+		var min_x: float = INF
+		var max_x: float = -INF
+		for t: Variant in row_tips[r]:
+			min_x = minf(min_x, (t as Vector2).x)
+			max_x = maxf(max_x, (t as Vector2).x)
+		for side: Array in [[edit.size.x - 3.0, max_x, "right"], [3.0, min_x, "left"]]:
+			var got: Vector2i = adapter.get_pos_at_local(Vector2(float(side[0]), y))
+			var got_tip: Vector2 = adapter.get_tip_local(got)
+			var got_alt: float = adapter.last_alternative_x
+			var ok_x: bool = absf(got_tip.x - float(side[1])) <= 3.0 or (not is_nan(got_alt) and absf(got_alt - float(side[1])) <= 3.0)
+			if not ok_x or absf(got_tip.y - (y + half)) > 2.0:
+				edge_wrong += " row %d %s edge -> column %d at %s (want x %.0f)" % [r, side[2], got.x, str(got_tip), float(side[1])]
+	_check(edge_wrong.is_empty(), "a point past either end of a mixed right-to-left row maps to that end of the row%s" % edge_wrong)
+	# Lean: select from the first row into the second.
+	var second_row_column: int = edit.get_line_wrap_index_at_column(0, 0)
+	for column: int in edit.get_line(0).length():
+		if edit.get_line_wrap_index_at_column(0, column) == 1:
+			second_row_column = column + 6
+			break
+	edit.select(0, 4, 0, second_row_column)
+	await _frames(4)
+	_check(_handle(0).visible and _handle(1).visible, "two handles on a selection across rows")
+	_check(_handle(0).style == caret_indicator.Style.RIGHT, "right-to-left: the start handle (upper row, right end of the selection) leans right, away from the selection")
+	_check(_handle(1).style == caret_indicator.Style.LEFT, "right-to-left: the end handle (lower row, left end) leans left, away from the selection")
+	# The drag a learner does: a word selected on row 1, its end handle (at the left) dragged down to
+	# the right end of row 3. The selection must then cover the rest of row 1 and all of row 2.
+	var row_starts: Array = [0]
+	for column: int in range(1, edit.get_line(0).length()):
+		if edit.get_line_wrap_index_at_column(0, column) != edit.get_line_wrap_index_at_column(0, column - 1):
+			row_starts.append(column)
+	if row_starts.size() >= 4:
+		edit.select(0, row_starts[1] + 14, 0, row_starts[1] + 18)
+		await _frames(4)
+		var from_before: int = edit.get_selection_from_column()
+		var row3_tip: Vector2 = _tip_of(edit, Vector2i(int(row_starts[3]), 0))
+		var target: Vector2 = Vector2(edit.get_global_rect().end.x - 6.0, row3_tip.y)
+		await _drag_handle_to(_handle(1), target)
+		var to_after: int = edit.get_selection_to_column()
+		_check(edit.get_selection_from_column() == from_before and edit.get_line_wrap_index_at_column(0, to_after) == 3 and to_after <= int(row_starts[3]) + 1, "dragging the end handle to the right end of row 3 selects through row 2 (from %d to %d, row 3 starts at %d)" % [edit.get_selection_from_column(), to_after, row_starts[3]])
+		_check(_handle(1).get_tip().distance_to(_tip_of(edit, Vector2i(to_after, 0))) < 2.0, "after the release the end handle sits where the selection ends")
+	edit.text_direction = Control.TEXT_DIRECTION_LTR
+	edit.text = "some plain english text that is long enough to wrap onto a second row in this box"
+	await _frames(3)
+	for column: int in edit.get_line(0).length():
+		if edit.get_line_wrap_index_at_column(0, column) == 1:
+			second_row_column = column + 4
+			break
+	edit.select(0, 2, 0, second_row_column)
+	await _frames(4)
+	_check(_handle(0).style == caret_indicator.Style.LEFT and _handle(1).style == caret_indicator.Style.RIGHT, "left-to-right: start leans left, end leans right (as before)")
 
 #endregion
 

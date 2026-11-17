@@ -182,6 +182,7 @@ The delegate has any of the methods below, with the same names and parameters as
 | `get_tip_local(pos)` | Where the handle's tip goes (bottom of the caret) | `(0, 0)` |
 | `get_pos_at_local(point)` | Which position a dragged handle or a long press points at | `(0, 0)` |
 | `get_line_height()` | Handle and toolbar placement | 16 |
+| `is_pos_rtl(pos)` | Which way the selection handles lean: in a right-to-left line the upper handle leans right | `false` |
 | `is_pos_visible(pos)` | Hiding handles that are scrolled away | The tip is inside the control |
 | `has_selection()`, `get_selection_from()`, `get_selection_to()`, `select(anchor, caret)`, `deselect()` | Selection handles and the toolbar | No selection |
 | `select_word_at(pos)` | Long press | Nothing |

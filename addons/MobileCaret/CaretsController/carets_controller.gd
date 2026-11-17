@@ -366,6 +366,10 @@ func _style_for(pos: Vector2i, other: Vector2i) -> caret_indicator.Style:
 	var before: bool
 	if absf(a.y - b.y) > row_gap:
 		before = a.y < b.y
+		# In a right-to-left line the upper handle is at the right end of its row (the selection
+		# runs to its left), so it leans right; the lower one leans left.
+		if _adapter.is_pos_rtl(pos):
+			before = not before
 	elif not is_equal_approx(a.x, b.x):
 		before = a.x < b.x
 	else:

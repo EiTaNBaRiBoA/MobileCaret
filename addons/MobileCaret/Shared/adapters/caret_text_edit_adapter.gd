@@ -284,7 +284,55 @@ func get_pos_at_local(local: Vector2) -> Vector2i:
 	var clamped: Vector2 = Vector2(local.x, clampf(local.y, 1.0, maxf(edit.size.y - 1.0, 1.0)))
 	var column_line: Vector2i = edit.get_line_column_at_pos(Vector2i(clamped), true, true)
 	var line: int = clampi(column_line.y, 0, edit.get_line_count() - 1)
+	# Rows with right-to-left text: the engine maps points (above all past the ends of a row) to the
+	# wrong column, often on another row, so a dragged handle selected somewhere else.
+	var bidi: Vector2i = _bidi_pos_at(line, clamped)
+	if bidi.x >= 0:
+		return bidi
 	return Vector2i(clampi(column_line.x, 0, edit.get_line(line).length()), line)
+
+func is_pos_rtl(pos: Vector2i) -> bool:
+	var edit: TextEdit = _edit()
+	if pos.y < 0 or pos.y >= edit.get_line_count():
+		return false
+	var direction: int = _text_direction()
+	if direction == TextServer.DIRECTION_AUTO:
+		direction = _line_direction(edit.get_line(pos.y))
+	return direction == TextServer.DIRECTION_RTL
+
+# The text position under a local point in a line that has right-to-left text, or (-1, -1) for a
+# plain left-to-right line. The row comes from the height, the column from the shaped row (as
+# _bidi_caret_x draws it); a point past either end of the row gives that end, on that row.
+func _bidi_pos_at(line: int, local: Vector2) -> Vector2i:
+	var edit: TextEdit = _edit()
+	var line_text: String = edit.get_line(line)
+	var direction: int = _text_direction()
+	if line_text.is_empty() or (direction != TextServer.DIRECTION_RTL and not _has_rtl_text(line_text)):
+		return Vector2i(-1, -1)
+	var top: float = _caret_top_left(Vector2i(0, line)).y
+	if top < 0.0:
+		return Vector2i(-1, -1)
+	var rows: PackedStringArray = edit.get_line_wrapped_text(line)
+	var row: int = clampi(int(floor((local.y - top) / maxf(get_line_height(), 1.0))), 0, rows.size() - 1)
+	var row_start: int = 0
+	for i: int in row:
+		row_start += rows[i].length()
+	# The column drawn on this row closest to the point. Picking by the drawn position (not by hit
+	# testing the shaped row) keeps a dragged handle under the finger also where a row mixes
+	# directions and an edge position has two valid places (the handle is drawn at one of them).
+	var line_length: int = line_text.length()
+	var row_top: float = top + float(row) * get_line_height()
+	var best: int = -1
+	var best_distance: float = INF
+	for candidate: int in range(maxi(row_start - 1, 0), mini(row_start + rows[row].length() + 1, line_length) + 1):
+		var top_left: Vector2 = _caret_top_left(Vector2i(candidate, line))
+		if absf(top_left.y - row_top) >= 1.0:
+			continue
+		var distance: float = absf(top_left.x - local.x)
+		if distance < best_distance:
+			best_distance = distance
+			best = candidate
+	return Vector2i(best, line) if best >= 0 else Vector2i(-1, -1)
 
 func get_drag_target(local: Vector2, _current: Vector2i, delta: float) -> Vector2i:
 	var edit: TextEdit = _edit()

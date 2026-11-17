@@ -112,6 +112,9 @@ func get_line_height() -> float:
 func get_pos_at_local(local: Vector2) -> Vector2i:
 	return _forward(&"get_pos_at_local", [local], Vector2i.ZERO) as Vector2i
 
+func is_pos_rtl(pos: Vector2i) -> bool:
+	return bool(_forward(&"is_pos_rtl", [pos], false))
+
 func get_row_x_extent(local_y: float) -> Vector2:
 	if has(&"get_row_x_extent"):
 		return _forward(&"get_row_x_extent", [local_y], Vector2(-INF, INF)) as Vector2
