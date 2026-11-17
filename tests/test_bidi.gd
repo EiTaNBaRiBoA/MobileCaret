@@ -565,6 +565,55 @@ func _test_text_edit_rtl_hit_and_lean() -> void:
 		var to_after: int = edit.get_selection_to_column()
 		_check(edit.get_selection_from_column() == from_before and edit.get_line_wrap_index_at_column(0, to_after) == 3 and to_after <= int(row_starts[3]) + 1, "dragging the end handle to the right end of row 3 selects through row 2 (from %d to %d, row 3 starts at %d)" % [edit.get_selection_from_column(), to_after, row_starts[3]])
 		_check(_handle(1).get_tip().distance_to(_tip_of(edit, Vector2i(to_after, 0))) < 2.0, "after the release the end handle sits where the selection ends")
+	# A long paragraph scrolled so its first rows are out of view: points on the rows still shown map
+	# back to the positions drawn there (the row is found without the line's top being on screen).
+	edit.text = "%s %s %s" % [MIXED_PARAGRAPH, MIXED_PARAGRAPH, MIXED_PARAGRAPH]
+	edit.size = Vector2(560.0, 160.0)
+	await _frames(3)
+	edit.scroll_vertical = 3.0
+	await _frames(3)
+	var first_hidden: bool = adapter.get_tip_local(Vector2i(0, 0)).y < 0.0 or not adapter.is_pos_visible(Vector2i(0, 0))
+	var scrolled_checked: int = 0
+	var scrolled_wrong: String = ""
+	for column: int in range(1, edit.get_line(0).length()):
+		var pos_s: Vector2i = Vector2i(column, 0)
+		if not adapter.is_pos_visible(pos_s):
+			continue
+		var tip_s: Vector2 = adapter.get_tip_local(pos_s)
+		var alt_s: float = adapter.last_alternative_x
+		var back_s: Vector2i = adapter.get_pos_at_local(tip_s - Vector2(0.0, half))
+		var back_tip_s: Vector2 = adapter.get_tip_local(back_s)
+		var back_alt_s: float = adapter.last_alternative_x
+		scrolled_checked += 1
+		var near_s: bool = false
+		for x: float in [back_tip_s.x, back_alt_s]:
+			if not is_nan(x) and (absf(x - tip_s.x) <= 3.0 or (not is_nan(alt_s) and absf(x - alt_s) <= 3.0)):
+				near_s = true
+		if (absf(back_tip_s.y - tip_s.y) >= 2.0 or not near_s) and scrolled_wrong.is_empty():
+			scrolled_wrong = " (first: column %d at %s maps to %d at %s)" % [column, str(tip_s), back_s.x, str(back_tip_s)]
+	_check(first_hidden and scrolled_checked > 20 and scrolled_wrong.is_empty(), "scrolled so the paragraph's first row is hidden, points on the shown rows still map back (%d checked, first row hidden: %s)%s" % [scrolled_checked, first_hidden, scrolled_wrong])
+	# And past the ends of the shown rows: that end of the same row.
+	var shown_rows: Dictionary = {}
+	for column: int in edit.get_line(0).length() + 1:
+		if not adapter.is_pos_visible(Vector2i(column, 0)):
+			continue
+		var tip_r: Vector2 = adapter.get_tip_local(Vector2i(column, 0))
+		var key_r: int = int(round(tip_r.y))
+		var extent_r: Vector2 = shown_rows.get(key_r, Vector2(INF, -INF))
+		shown_rows[key_r] = Vector2(minf(extent_r.x, tip_r.x), maxf(extent_r.y, tip_r.x))
+	var scrolled_edges: String = ""
+	for key_r: int in shown_rows:
+		var extent: Vector2 = shown_rows[key_r]
+		for side_r: Array in [[edit.size.x - 3.0, extent.y], [3.0, extent.x]]:
+			var got_r: Vector2i = adapter.get_pos_at_local(Vector2(float(side_r[0]), float(key_r) - half))
+			var got_tip_r: Vector2 = adapter.get_tip_local(got_r)
+			var got_alt_r: float = adapter.last_alternative_x
+			var on_end: bool = absf(got_tip_r.x - float(side_r[1])) <= 3.0 or (not is_nan(got_alt_r) and absf(got_alt_r - float(side_r[1])) <= 3.0)
+			if not on_end or absf(got_tip_r.y - float(key_r)) > 2.0:
+				scrolled_edges += " row at y %d, x %.0f -> column %d at %s (want x %.0f)" % [key_r, float(side_r[0]), got_r.x, str(got_tip_r), float(side_r[1])]
+	_check(shown_rows.size() >= 2 and scrolled_edges.is_empty(), "scrolled: a point past either end of a shown row maps to that end of the row (%d rows)%s" % [shown_rows.size(), scrolled_edges])
+	edit.scroll_vertical = 0.0
+	edit.size = Vector2(560.0, 420.0)
 	edit.text_direction = Control.TEXT_DIRECTION_LTR
 	edit.text = "some plain english text that is long enough to wrap onto a second row in this box"
 	await _frames(3)

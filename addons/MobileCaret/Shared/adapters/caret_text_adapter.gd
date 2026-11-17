@@ -191,12 +191,12 @@ func is_pos_clipped(pos: Vector2i) -> bool:
 		node = node.get_parent()
 	return false
 
-# Nearest text position for a local point (clamped to the text).
 # Whether the line of a text position reads right to left (its base direction). Selection handles
 # on different rows lean the other way in such a line, so they never cover the selected text.
 func is_pos_rtl(_pos: Vector2i) -> bool:
 	return false
 
+# Nearest text position for a local point (clamped to the text).
 func get_pos_at_local(_local: Vector2) -> Vector2i:
 	return Vector2i.ZERO
 

@@ -309,19 +309,29 @@ func _bidi_pos_at(line: int, local: Vector2) -> Vector2i:
 	var direction: int = _text_direction()
 	if line_text.is_empty() or (direction != TextServer.DIRECTION_RTL and not _has_rtl_text(line_text)):
 		return Vector2i(-1, -1)
-	var top: float = _caret_top_left(Vector2i(0, line)).y
-	if top < 0.0:
-		return Vector2i(-1, -1)
+	# The row: the shown row whose middle is closest to the point. Each row is measured on its own,
+	# so this also works when the line's first rows are scrolled out of view (a long paragraph).
 	var rows: PackedStringArray = edit.get_line_wrapped_text(line)
-	var row: int = clampi(int(floor((local.y - top) / maxf(get_line_height(), 1.0))), 0, rows.size() - 1)
+	var half_height: float = get_line_height() * 0.5
+	var row: int = -1
+	var row_top: float = 0.0
 	var row_start: int = 0
-	for i: int in row:
-		row_start += rows[i].length()
+	var best_row_distance: float = INF
+	var start: int = 0
+	for i: int in rows.size():
+		var y: float = _caret_top_left(Vector2i(start + (rows[i].length() >> 1), line)).y
+		if y >= 0.0 and absf(local.y - (y + half_height)) < best_row_distance:
+			best_row_distance = absf(local.y - (y + half_height))
+			row = i
+			row_top = y
+			row_start = start
+		start += rows[i].length()
+	if row < 0:
+		return Vector2i(-1, -1)
 	# The column drawn on this row closest to the point. Picking by the drawn position (not by hit
 	# testing the shaped row) keeps a dragged handle under the finger also where a row mixes
 	# directions and an edge position has two valid places (the handle is drawn at one of them).
 	var line_length: int = line_text.length()
-	var row_top: float = top + float(row) * get_line_height()
 	var best: int = -1
 	var best_distance: float = INF
 	for candidate: int in range(maxi(row_start - 1, 0), mini(row_start + rows[row].length() + 1, line_length) + 1):
