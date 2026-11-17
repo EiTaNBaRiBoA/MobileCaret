@@ -11,6 +11,8 @@ const EDGE_MARGIN: float = 16.0
 const MAX_CACHED_ROWS: int = 12
 
 var _row_cache: Dictionary = {}
+# The direction "auto" resolves to, by line text (bounded like the rows).
+var _line_direction_cache: Dictionary = {}
 # Set by the last right-to-left lookup: the other valid caret x when a direction change gives two
 # (NAN otherwise). The engine picks one depending on its input direction, which cannot be read.
 var last_alternative_x: float = NAN
@@ -227,15 +229,23 @@ func _text_direction() -> int:
 			return TextServer.DIRECTION_AUTO
 	return TextServer.DIRECTION_RTL if edit.is_layout_rtl() else TextServer.DIRECTION_LTR
 
-# The direction "auto" resolves to for a whole line (its first strong letter decides).
+# The direction "auto" resolves to for a whole line (its first strong letter decides). Cached: the
+# handles ask on every move, and shaping a long line each time is wasted work.
 func _line_direction(line_text: String) -> int:
 	var edit: TextEdit = _edit()
+	var key: String = "%s|%s" % [line_text, edit.language]
+	if _line_direction_cache.has(key):
+		return _line_direction_cache[key]
 	var line: TextLine = TextLine.new()
 	line.direction = TextServer.DIRECTION_AUTO
 	line.add_string(line_text, edit.get_theme_font("font"), edit.get_theme_font_size("font_size"), edit.language)
-	# the direction is inferred when the line is shaped, so shape it first
+	# The direction is inferred when the line is shaped, so shape it first.
 	TextServerManager.get_primary_interface().shaped_text_shape(line.get_rid())
-	return line.get_inferred_direction()
+	var direction: int = line.get_inferred_direction()
+	if _line_direction_cache.size() >= MAX_CACHED_ROWS:
+		_line_direction_cache.erase(_line_direction_cache.keys()[0])
+	_line_direction_cache[key] = direction
+	return direction
 
 # Shapes one visual row like the TextEdit does (cached).
 func _shape_row(row_text: String, direction: int) -> TextLine:

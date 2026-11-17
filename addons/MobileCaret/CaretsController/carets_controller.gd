@@ -432,10 +432,10 @@ static func _over_control(control: Control, point: Vector2) -> bool:
 
 # A shown handle counts as part of the field, even while it is faded out.
 func _over_any_handle(point: Vector2) -> bool:
-	var margin: float = hit_margin * _active.ui_scale
 	for handle: caret_indicator in _active.handles:
-		# Not hits(): that one ignores faded handles.
-		if handle.is_visible_in_tree() and Rect2(handle.global_position, handle.size).grow(margin).has_point(point):
+		# Not hits(): that one ignores faded handles. The same grab area as _handle_at, so a tap
+		# that could grab a handle never counts as a tap outside.
+		if handle.is_visible_in_tree() and Rect2(handle.global_position, handle.size).grow(_hit_margin_for(handle)).has_point(point):
 			return true
 	return false
 
@@ -474,16 +474,26 @@ func _keeps_focus(node: Node, viewport: Viewport, point: Vector2, focused: Contr
 
 #endregion
 
-# The visible handle under a viewport-space point (the closest one if several overlap).
 # The grab margin around a handle: `hit_margin` (scaled with the handle), widened when needed so
 # the whole area is at least `min_touch_mm` across.
 func _hit_margin_for(handle: caret_indicator) -> float:
-	var margin: float = hit_margin * _active.ui_scale
-	if min_touch_mm > 0.0 and _active.viewport != null:
-		var touch: float = caret_screen.mm_to_logical(_active.viewport, min_touch_mm)
-		margin = maxf(margin, (touch - minf(handle.size.x, handle.size.y)) * 0.5)
+	return _grab_margin(handle.size, _active.ui_scale, _active.viewport)
+
+func _grab_margin(handle_px: Vector2, ui_scale: float, viewport: Viewport) -> float:
+	var margin: float = hit_margin * ui_scale
+	if min_touch_mm > 0.0 and viewport != null:
+		var touch: float = caret_screen.mm_to_logical(viewport, min_touch_mm)
+		margin = maxf(margin, (touch - minf(handle_px.x, handle_px.y)) * 0.5)
 	return margin
 
+# How far below a caret a handle reaches, with the area it is grabbed in, in logical pixels of
+# `viewport`. The toolbar keeps clear of it when it has to sit under a selection.
+func get_handle_reach(viewport: Viewport) -> float:
+	var size_now: Vector2 = _compute_handle_size(viewport)
+	var scale_now: float = size_now.x / maxf(handle_size.x, 1.0)
+	return maxf(0.0, size_now.y + _grab_margin(size_now, scale_now, viewport) + caret_texture_offset.y)
+
+# The visible handle under a viewport-space point (the closest one if several overlap).
 func _handle_at(point: Vector2) -> caret_indicator:
 	var best: caret_indicator = null
 	var best_distance: float = INF

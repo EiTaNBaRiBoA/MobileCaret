@@ -387,6 +387,13 @@ func _try_connect_controller(delta: float) -> void:
 			_linked_controller = node
 			return
 
+# How far the selection handles reach below a caret, in logical pixels: asked from the linked
+# controller, or 9 mm (room for a large handle) when there is none.
+func _handle_reach(viewport: Viewport) -> float:
+	if is_instance_valid(_linked_controller) and _linked_controller.has_method(&"get_handle_reach"):
+		return float(_linked_controller.call(&"get_handle_reach", viewport))
+	return caret_screen.mm_to_logical(viewport, 9.0)
+
 func _on_handle_tapped(control: Control) -> void:
 	if not enabled or _adapter == null or control != _adapter.control:
 		return
@@ -568,8 +575,8 @@ func _place() -> void:
 		center_x = (to_viewport * Vector2(control.size.x * 0.5, 0.0)).x
 	var top: float = from_tip.y - line_height - gap - panel_size.y
 	if top < bounds.position.y + gap:
-		# No room above: go below the selection, clear of the selection handles (about 9 mm).
-		top = to_tip.y + caret_screen.mm_to_logical(viewport, 9.0) + gap
+		# No room above: go below the selection, clear of the selection handles and their grab area.
+		top = to_tip.y + _handle_reach(viewport) + gap
 	var left: float = clampf(center_x - panel_size.x * 0.5, bounds.position.x + gap, maxf(bounds.end.x - panel_size.x - gap, bounds.position.x + gap))
 	top = clampf(top, bounds.position.y + gap, maxf(bounds.end.y - panel_size.y - gap, bounds.position.y + gap))
 	_panel.global_position = Vector2(left, top)

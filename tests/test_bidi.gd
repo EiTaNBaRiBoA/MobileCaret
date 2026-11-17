@@ -371,10 +371,22 @@ func _test_text_edit_caret_positions() -> void:
 	# its wrapped Hebrew rows too (the handles were placed as if each row decided on its own).
 	var saved_text: String = edit.text
 	edit.text_direction = Control.TEXT_DIRECTION_AUTO
-	edit.text = "NRZ: %s %s
-%s" % [LONG_HEBREW, HEBREW, LONG_HEBREW]
+	edit.text = "NRZ: %s %s\n%s" % [LONG_HEBREW, HEBREW, LONG_HEBREW]
 	await _frames(3)
 	await _check_text_edit_positions(edit, "auto direction, a Latin start, wrapped Hebrew rows")
+	# The line's direction is cached by its text: editing the line to start in Hebrew turns it
+	# right to left (no stale answer), and the cache stays small.
+	edit.text = "%s NRZ: %s\n%s" % [HEBREW, LONG_HEBREW, LONG_HEBREW]
+	await _frames(3)
+	await _check_text_edit_positions(edit, "auto direction, the same words starting in Hebrew")
+	var auto_adapter: caret_text_edit_adapter = caret_text_adapter.for_control(edit) as caret_text_edit_adapter
+	var latin_first: String = "NRZ: %s" % HEBREW
+	var hebrew_first: String = "%s NRZ:" % HEBREW
+	_check(auto_adapter._line_direction(latin_first) == TextServer.DIRECTION_LTR and auto_adapter._line_direction(latin_first) == TextServer.DIRECTION_LTR, "a line starting in Latin resolves to left to right (also from the cache)")
+	_check(auto_adapter._line_direction(hebrew_first) == TextServer.DIRECTION_RTL, "the same words starting in Hebrew resolve to right to left")
+	for i: int in 30:
+		auto_adapter._line_direction("%d %s" % [i, HEBREW])
+	_check(auto_adapter._line_direction_cache.size() <= caret_text_edit_adapter.MAX_CACHED_ROWS, "the line direction cache stays bounded (%d lines)" % auto_adapter._line_direction_cache.size())
 	edit.text_direction = Control.TEXT_DIRECTION_INHERITED
 	edit.text = saved_text
 	await _frames(2)

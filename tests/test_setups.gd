@@ -379,6 +379,17 @@ func _test_physical_handle_size() -> void:
 	_check(small.size.x < touch, "the test handle is smaller than the touch area (%.1f < %.1f)" % [small.size.x, touch])
 	_check(_controller._handle_at(side) == small, "a small handle is grabbed up to min_touch_mm / 2 from its middle")
 	_check(_controller._handle_at(small.get_global_rect().get_center() + Vector2(touch, 0.0)) == null, "but not much farther")
+	# A tap that could grab the handle is never a tap outside the field, even on a faded handle.
+	_check(_controller._over_any_handle(side), "a tap in the wider grab area counts as on the handle (not a tap outside)")
+	var saved_alpha: float = small.modulate.a
+	small.modulate.a = 0.0
+	_check(_controller._handle_at(side) == null and _controller._over_any_handle(side), "a faded handle cannot be grabbed, but a tap on its grab area is still not a tap outside")
+	small.modulate.a = saved_alpha
+	# How far the handle reaches below the caret (the toolbar keeps clear of it): its height and
+	# the grab margin under it.
+	var margin: float = (touch - minf(small.size.x, small.size.y)) * 0.5
+	var reach: float = _controller.get_handle_reach(get_viewport())
+	_check(absf(reach - (small.size.y + margin)) < 0.5, "get_handle_reach is the handle's height plus its grab margin (%.1f, expected %.1f)" % [reach, small.size.y + margin])
 	_controller.handle_size_mm = saved_mm
 
 

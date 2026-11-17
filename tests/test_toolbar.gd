@@ -261,6 +261,10 @@ func _test_placement() -> void:
 	var bar: Rect2 = _toolbar.get_toolbar_rect()
 	_check(bar.position.y >= edit.get_global_rect().end.y - 0.5, "no room above: the toolbar goes below the control (bar top %.1f, control bottom %.1f)" % [bar.position.y, edit.get_global_rect().end.y])
 	_check(get_viewport().get_visible_rect().encloses(bar), "and stays inside the viewport")
+	# Just clear of the handles and their grab area (the controller says how far they reach).
+	var tip_y: float = (edit.get_global_transform_with_canvas() * caret_text_adapter.for_control(edit).get_tip_local(Vector2i(8, 0))).y
+	var expected_top: float = tip_y + _controller.get_handle_reach(get_viewport()) + caret_screen.mm_to_logical(get_viewport(), _toolbar.gap_mm)
+	_check(absf(bar.position.y - expected_top) < 1.0, "below the selection it sits just past the handles' reach (top %.1f, expected %.1f)" % [bar.position.y, expected_top])
 
 	# At the far right edge it is pushed back inside.
 	await _reset()

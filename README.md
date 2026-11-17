@@ -4,7 +4,7 @@ Touch-friendly text carets and selection handles for Godot 4, in the style of An
 
 ## Motivation
 
-Godot's built-in caret is a thin line that is hard to see and almost impossible to place precisely with a finger. This plugin adds large, easy-to-grab handles so editing text on a phone feels natural.
+Godot's built-in caret is a thin line that is hard to see and almost impossible to place precisely with a finger. This plugin adds Android-style handles with a finger-sized grab area, so editing text on a phone feels natural.
 
 ## Screenshots
 
@@ -109,7 +109,7 @@ If a control already has its own `caret_color` override, it is restored exactly 
 
 The toolbar (`addons/MobileCaret/Toolbar`) is a separate autoload, `MobileCaretToolbar`. Nothing in the handles' code depends on it: remove its autoload, or switch it off in code, and everything else works the same. If the `MobileCaret` controller is present the toolbar also listens to its `handle_tapped` signal; without it the toolbar still works from focus and selection alone. It works for `LineEdit`, `TextEdit`, `CodeEdit`, the `LineEdit` inside a `SpinBox` and selectable `RichTextLabel`s, and custom controls (see [Custom controls](#custom-controls)), in the main window and in any other `Window` or `SubViewport`. A `RichTextLabel` gets the toolbar only: Godot cannot set its selection from code, so there are no selection handles for it.
 
-* It appears above a selection once the selection has settled and no mouse button is held, so it stays out of the way while you drag a handle. If there is no room above, it goes below the selection. It keeps its physical size, only shrinking when a small viewport is too narrow for it.
+* It appears above a selection once the selection has settled and no mouse button is held, so it stays out of the way while you drag a handle. If there is no room above, it goes below the selection, clear of the handles and the area they are grabbed in. It keeps its physical size, only shrinking when a small viewport is too narrow for it.
 * It only offers what applies: Cut and Paste need an editable control, Paste needs something on the clipboard, and Select all is hidden when everything is already selected. A password field (`secret`) never offers Copy, Cut or Share.
 * Tapping a caret handle (without dragging) shows Paste / Select all at the caret.
 * Tapping inside an existing selection keeps the selection and shows or hides the toolbar, like Android.
