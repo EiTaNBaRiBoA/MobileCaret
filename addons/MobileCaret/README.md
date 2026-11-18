@@ -292,6 +292,22 @@ caret_text_adapter.register_adapter(factory)
 caret_text_adapter.unregister_adapter(factory)
 ```
 
+## Tests
+
+The test scenes are in [tests](../../tests): custom controls, the toolbar, carets, several carets,
+right-to-left text, project setups, viewports and focus. They need a window (handles, dragging and
+the toolbar are checked with real pointer events). One command creates a development project around
+this folder (when there is none), checks that every script compiles under strict typing, and runs
+every scene:
+
+```powershell
+.\run_tests.ps1                  # every suite
+.\run_tests.ps1 -Suite toolbar   # one suite
+```
+
+A suite passes only with no failures and no script error: a script that does not compile never runs
+its checks.
+
 ## Compatibility
 
 * Built and tested with Godot 4.7.
