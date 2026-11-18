@@ -218,8 +218,10 @@ menu.detach()                                       # remove it
 The items take the keys `add_item` takes (`id`, `text`, `index`, `items`, `font`, `icon`,
 `callback`). `long_press_time` (0.5 s) and `move_limit` (12 units) can be changed on the menu, and
 `open_at(point)` / `close()` open and close it from code. There are no text buttons for an image and
-no Copy: Godot cannot put an image on the clipboard (it can only read one), so an app offers what it
-can do with the image itself, such as saving it.
+no built-in Copy: Godot cannot put an image on the clipboard (it can only read one). An app adds
+what it can do with the image itself, such as saving it, or copying it through the system (Lilmoclass
+does that from GDScript: Android's clipboard through Godot's Java bridge, Windows through
+PowerShell; see its `core/image_clipboard.gd`).
 
 ## Custom controls
 
