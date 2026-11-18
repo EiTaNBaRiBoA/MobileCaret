@@ -30,6 +30,7 @@ const ACTION_UNDO: StringName = &"undo"
 const ACTION_REDO: StringName = &"redo"
 const ACTION_SHARE: StringName = &"share"
 const ACTION_DELETE: StringName = &"delete"
+const ACTION_COPY_IMAGE: StringName = &"copy_image"
 # Buttons that only open and close the overflow menu (no action_pressed signal).
 const ITEM_MORE: StringName = &"more"
 const ITEM_BACK: StringName = &"back"
@@ -71,6 +72,9 @@ const CLIPBOARD_CHECK_SECONDS: float = 0.5
 ## Delete: removes the selected text without copying it. Off by default (like Share).
 @export var show_delete: bool = false
 @export var text_delete: String = "Delete"
+## Copy image, in the menu of an image (caret_image_menu), where the system clipboard can take an image.
+@export var show_copy_image: bool = true
+@export var text_copy_image: String = "Copy image"
 
 @export_group("Overflow menu")
 # The "more" button that opens Undo / Redo / Share.
@@ -499,6 +503,8 @@ func _build_entries() -> Array[Dictionary]:
 	var main_row: Array[Dictionary] = []
 	# the control's own settings come on top of the toolbar's switches (set_control_actions)
 	var allows: Callable = _adapter.allows_action
+	if show_copy_image and _adapter.can_copy_image() and allows.call(ACTION_COPY_IMAGE):
+		main_row.append(_entry(ACTION_COPY_IMAGE, text_copy_image))
 	if show_cut and copyable and editable and allows.call(ACTION_CUT):
 		main_row.append(_entry(ACTION_CUT, text_cut))
 	if show_delete and has_selection and editable and _adapter.can_delete() and allows.call(ACTION_DELETE):
@@ -805,6 +811,8 @@ func _perform(action: StringName) -> void:
 			_adapter.cut()
 		ACTION_DELETE:
 			_adapter.delete_selection()
+		ACTION_COPY_IMAGE:
+			_adapter.copy_image()
 		ACTION_COPY:
 			_adapter.copy()
 			# Like Android: the selection stays, the toolbar goes away until it changes.

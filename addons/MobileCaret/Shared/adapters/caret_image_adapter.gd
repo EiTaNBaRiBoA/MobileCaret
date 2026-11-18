@@ -49,8 +49,16 @@ func get_line_height() -> float:
 func get_selected_text() -> String:
 	return ""
 
-func allows_action(_action: StringName) -> bool:
-	return false
+# Only Copy image applies to an image (and the control's own settings may turn it off).
+func allows_action(action: StringName) -> bool:
+	return action == &"copy_image" and caret_menu_settings.allows(control, action)
+
+func can_copy_image() -> bool:
+	return is_valid() and menu.can_copy_image()
+
+func copy_image() -> void:
+	if is_valid():
+		menu.copy_image()
 
 func get_toolbar_items() -> Array:
 	return menu.items.duplicate() if is_valid() else []

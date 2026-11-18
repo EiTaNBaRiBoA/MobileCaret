@@ -7,11 +7,21 @@
 #
 # Items are Dictionaries as for caret_toolbar.add_item ("id", "text", "index", "items", "font",
 # "icon", "callback"). The menu can be switched off from code like any control's menu:
-# MobileCaretToolbar.set_control_menu(image, false). There is no Copy: Godot cannot put an image on
-# the clipboard.
+# MobileCaretToolbar.set_control_menu(image, false).
+#
+# Where the system clipboard can take an image (caret_image_clipboard: Android, Windows) the menu also
+# has a built-in "Copy image" button (MobileCaretToolbar.show_copy_image). The image is the control's
+# texture (a TextureRect), what its get_image() returns, what `image_source` returns, or else the
+# control as it is on screen when the menu opens.
+#
+# A view whose own presses do something (a slider, a node: MathDisplayGD's views) answers
+# is_interactive_at(point): a long press that starts on such a spot opens no menu, so the view works
+# as before.
 class_name caret_image_menu extends Node
 
 signal item_pressed(id: StringName)
+# Copy image finished: "" or what went wrong.
+signal image_copied(error: String)
 
 # Set on the image while a menu is attached (its value is this node).
 const META: StringName = &"mobile_caret_image_menu"
@@ -25,6 +35,10 @@ var long_press_time: float = 0.5
 var move_limit: float = 12.0
 # Where the menu points, in the image's coordinates (the long-pressed place).
 var menu_point: Vector2 = Vector2.ZERO
+# Returns the Image to copy (optional; see the class description for the other sources).
+var image_source: Callable = Callable()
+
+var _snapshot: Image = null
 
 var _open: bool = false
 var _held: bool = false
@@ -93,6 +107,10 @@ func open_at(point: Vector2) -> void:
 	if not is_instance_valid(image) or not caret_menu_settings.is_menu_enabled(image):
 		return
 	menu_point = point
+	# a view drawn on screen is taken now, before the toolbar covers it
+	_snapshot = null
+	if _own_image() == null:
+		_snapshot = _capture()
 	_open = true
 	_saved_focus_mode = image.focus_mode
 	if image.focus_mode == Control.FOCUS_NONE:
@@ -110,6 +128,55 @@ func close() -> void:
 		image.focus_mode = _saved_focus_mode as Control.FocusMode
 
 
+# The image the menu stands for (see the class description). Null if there is none.
+func get_image() -> Image:
+	var own: Image = _own_image()
+	return own if own != null else _snapshot
+
+
+func _own_image() -> Image:
+	if not is_instance_valid(image):
+		return null
+	var got: Variant = null
+	if image_source.is_valid():
+		got = image_source.call()
+	elif image.has_method(&"get_image"):
+		got = image.call(&"get_image")
+	elif image is TextureRect and (image as TextureRect).texture != null:
+		got = (image as TextureRect).texture.get_image()
+	if got is Texture2D:
+		got = (got as Texture2D).get_image()
+	return got as Image if got is Image and not (got as Image).is_empty() else null
+
+
+# The control as it is on screen (its part of the viewport's last frame).
+func _capture() -> Image:
+	var viewport: Viewport = image.get_viewport()
+	var frame: Image = viewport.get_texture().get_image() if viewport != null else null
+	if frame == null:
+		return null
+	var scale: float = float(frame.get_width()) / maxf(1.0, viewport.get_visible_rect().size.x)
+	var rect: Rect2 = image.get_global_transform_with_canvas() * Rect2(Vector2.ZERO, image.size)
+	var pixels: Rect2i = Rect2i(Rect2(rect.position * scale, rect.size * scale)).intersection(Rect2i(Vector2i.ZERO, frame.get_size()))
+	if pixels.size.x <= 0 or pixels.size.y <= 0:
+		return null
+	return frame.get_region(pixels)
+
+
+func can_copy_image() -> bool:
+	return caret_image_clipboard.supported()
+
+
+# Puts the image on the clipboard; image_copied tells how it went. The menu closes.
+func copy_image() -> void:
+	var picture: Image = get_image()
+	close()
+	if picture == null:
+		image_copied.emit("no image")
+		return
+	caret_image_clipboard.copy_later(picture, func(err: String) -> void: image_copied.emit(err))
+
+
 # An item was pressed in the toolbar: tell the app, and close.
 func press(id: StringName) -> void:
 	item_pressed.emit(id)
@@ -125,6 +192,10 @@ func _on_gui_input(event: InputEvent) -> void:
 	# measured on the screen: a page that scrolls moves the image with the finger
 	var on_screen: Vector2 = image.get_global_transform_with_canvas() * local
 	if pressed:
+		# a spot whose press does something in the view (a slider, a node) is not for the menu
+		if image.has_method(&"is_interactive_at") and bool(image.call(&"is_interactive_at", local)):
+			_held = false
+			return
 		_held = true
 		_press_local = local
 		_press_screen = on_screen

@@ -22,7 +22,7 @@ Godot's built-in caret is a thin line that is hard to see and almost impossible 
 * **Customizable:** use your own handle texture, size and color.
 * **Your own toolbar buttons:** add buttons (or a submenu) at the position you choose; index 0 is the leftmost.
 * **A menu for each control:** switch the menu off for one control, or choose which buttons it may have (only Copy for a note, Copy / Cut / Delete for a field), from code.
-* **Menus on images:** a long press on an image (or any control without text) opens the toolbar with the buttons you give it, such as "Save image".
+* **Menus on images:** a long press on an image (or any control without text) opens the toolbar with a built-in **Copy image** (Android and Windows, from GDScript only) and the buttons you give it, such as "Save image". It stays away from the spots of an interactive view (a slider, a node) that answer `is_interactive_at()`.
 * **Custom controls:** your own text or math editors get the handles and the toolbar too. Return a small delegate object from `_get_caret_delegate()`, with no dependency on MobileCaret, or register an adapter from code (see [Custom controls](#custom-controls)).
 
 ## Installation
@@ -121,6 +121,7 @@ MobileCaretToolbar.share_requested.connect(func(text): print("share: ", text))
 | `show_cut`, `show_copy`, `show_paste`, `show_select_all` | Turn individual buttons off. |
 | `text_cut`, `text_copy`, `text_paste`, `text_select_all` | Button labels (for localization). |
 | `show_delete`, `text_delete` | The Delete button (off by default) and its label. |
+| `show_copy_image`, `text_copy_image` | Copy image in the menu of an image (on by default; shown where the system clipboard can take an image) and its label. |
 | `show_overflow`, `show_undo`, `show_redo`, `show_share` | The overflow menu and its entries (Share is off by default). |
 | `text_undo`, `text_redo`, `text_share`, `text_more`, `text_back` | Labels for the overflow menu. |
 | `tap_selection_toggles_toolbar` | Tapping inside a selection keeps it and toggles the toolbar (default on). Turn off to let such taps collapse the selection as usual. |
@@ -186,24 +187,49 @@ not limited by `set_control_actions`. A custom control's delegate can choose its
 #### Menus on images
 
 `caret_image_menu` gives an image (or any control without text) a menu: a long press opens the
-toolbar with the buttons you give it, above the place that was pressed. It works beside the image's
-own input: a press that moves (a pan, a pinch, a page that scrolls under the finger) is not a long
-press. A tap elsewhere closes it.
+toolbar above the place that was pressed, with a built-in **Copy image** button and the buttons you
+give it. It works beside the image's own input: a press that moves (a pan, a pinch, a page that
+scrolls under the finger) is not a long press. A tap elsewhere closes it.
 
 ```gdscript
 var menu := caret_image_menu.attach($Page, [{"id": &"save", "text": "Save image"}])
-menu.item_pressed.connect(func(id): save_page())
+menu.item_pressed.connect(func(id): save(menu.get_image()))
+menu.image_copied.connect(func(error): print("copied" if error == "" else error))
 MobileCaretToolbar.set_control_menu($Page, false)   # switch it off from code, like any control's menu
 menu.detach()                                       # remove it
 ```
 
 The items take the keys `add_item` takes (`id`, `text`, `index`, `items`, `font`, `icon`,
 `callback`). `long_press_time` (0.5 s) and `move_limit` (12 units) can be changed on the menu, and
-`open_at(point)` / `close()` open and close it from code. There are no text buttons for an image and
-no built-in Copy: Godot cannot put an image on the clipboard (it can only read one). An app adds
-what it can do with the image itself, such as saving it, or copying it through the system (Lilmoclass
-does that from GDScript: Android's clipboard through Godot's Java bridge, Windows through
-PowerShell; see its `core/image_clipboard.gd`).
+`open_at(point)` / `close()` open and close it from code. There are no text buttons for an image.
+
+**The image** (`get_image()`, what Copy image copies): what `image_source` returns (a Callable giving
+an `Image` or a `Texture2D`, for an image that changes), else the control's own `get_image()`, else a
+`TextureRect`'s texture, else the control as it is on screen when the menu opens (before the toolbar
+covers it): a plot, a diagram, any drawn view.
+
+**Interactive views.** A view whose own presses do something (a slider, a draggable point, a bit
+that flips, a node) answers `is_interactive_at(point: Vector2) -> bool` (MathDisplayGD's views do).
+A long press that starts on such a spot opens no menu, so the view works exactly as before; a long
+press on an empty spot opens the menu and does nothing in the view.
+
+**Copy image** (`caret_image_clipboard`). Godot can read an image from the clipboard but has no call
+to write one, so MobileCaret asks the system, from GDScript only (no plugin):
+
+| System | How | Note |
+| --- | --- | --- |
+| Android | Godot's Java bridge (`JavaClassWrapper`, the `AndroidRuntime` singleton): the PNG goes into the phone's pictures (`Pictures/<app name>`), and a link to it onto the clipboard | Android's clipboard holds a link, not the image. Only the latest copy is kept: the one before is deleted. Apps that accept pasted images (messaging apps, Gboard) paste it. |
+| Windows | PowerShell, `System.Windows.Forms.Clipboard.SetImage`, off the main thread | About a third of a second, a few seconds on the first start. |
+| Other systems | not supported | `caret_image_clipboard.supported()` is false and there is no Copy image button. |
+
+```gdscript
+caret_image_clipboard.supported()                       # can this system take an image?
+caret_image_clipboard.copy_later(image, func(error): print(error))   # "" when it worked
+```
+
+The Java bridge cannot pass `null` to a Java `String` parameter, and a call it refuses ends the
+GDScript function early with an empty result; `caret_image_clipboard.finished` tells a copy that
+went through from one that stopped, and `copy_later` reports a stopped copy as an error.
 
 ## Custom controls
 

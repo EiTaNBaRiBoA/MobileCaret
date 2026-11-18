@@ -275,6 +275,13 @@ func menu_enabled() -> bool:
 func allows_action(action: StringName) -> bool:
 	return caret_menu_settings.allows(control, action)
 
+# Whether this control is an image whose menu can copy it (caret_image_menu).
+func can_copy_image() -> bool:
+	return false
+
+func copy_image() -> void:
+	pass
+
 # Whether the selected text can be deleted from the menu (editable text controls).
 func can_delete() -> bool:
 	return false

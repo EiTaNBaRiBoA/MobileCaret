@@ -89,6 +89,8 @@ func _ready() -> void:
 	await _test_control_menu_settings()
 	await _test_delete_button()
 	await _test_image_menu()
+	await _test_copy_image()
+	await _test_image_menu_on_a_view()
 
 	DisplayServer.clipboard_set(_saved_clipboard)
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -218,7 +220,7 @@ func _select_and_wait(control: Control, from: Vector2i, to: Vector2i) -> void:
 
 func _button_ids() -> Array[StringName]:
 	var ids: Array[StringName] = []
-	for action: StringName in [&"back", &"cut", &"delete", &"copy", &"paste", &"select_all", &"undo", &"redo", &"share", &"more"]:
+	for action: StringName in [&"back", &"copy_image", &"cut", &"delete", &"copy", &"paste", &"select_all", &"undo", &"redo", &"share", &"more"]:
 		if _toolbar.get_button_rect(action).size != Vector2.ZERO:
 			ids.append(action)
 	return ids
@@ -924,7 +926,7 @@ func _test_image_menu() -> void:
 	_mouse_button(at, false)
 	await _wait_toolbar(true)
 	_check(_toolbar.is_showing() and _toolbar.get_button_rect(&"save_image").size != Vector2.ZERO, "a long press on the image opens its menu with its items")
-	_check(_button_ids().is_empty(), "no text buttons (Cut, Copy, Select all) for an image (got %s)" % str(_button_ids()))
+	_check(_button_ids().all(func(id: StringName) -> bool: return id == &"copy_image"), "no text buttons (Cut, Copy, Select all) for an image (got %s)" % str(_button_ids()))
 	var item_rect: Rect2 = _toolbar.get_button_rect(&"save_image")
 	_check(item_rect.end.y <= at.y + 1.0, "the menu is above the finger (%.0f, finger at %.0f)" % [item_rect.end.y, at.y])
 	await _click(item_rect.get_center())
@@ -961,4 +963,99 @@ func _test_image_menu() -> void:
 	_toolbar.clear_control_settings(pic)
 	menu.detach()
 	_check(not pic.has_meta(caret_image_menu.META), "detach() removes it from the image")
+	await _frames(2)
+
+
+# Copy image: a built-in button of an image's menu, where the system clipboard can take an image
+# (caret_image_clipboard: Android through Godot's Java bridge, Windows through PowerShell).
+func _test_copy_image() -> void:
+	print("\n== Copy image (caret_image_clipboard)")
+	await _reset()
+	var img: Image = Image.create(120, 80, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.9, 0.2, 0.1))
+	var pic: TextureRect = TextureRect.new()
+	pic.texture = ImageTexture.create_from_image(img)
+	pic.position = Vector2(80.0, 300.0)
+	pic.size = Vector2(120.0, 80.0)
+	_root.add_child(pic)
+	var menu: caret_image_menu = caret_image_menu.attach(pic, [{"id": &"save_image", "text": "Save image"}])
+	var results: Array = []
+	menu.image_copied.connect(func(error: String) -> void: results.append(error))
+	await _frames(2)
+	_check(menu.get_image() != null and menu.get_image().get_size() == Vector2i(120, 80), "the menu's image is the TextureRect's own")
+	var supported: bool = caret_image_clipboard.supported()
+	_check(supported == (OS.get_name() in ["Windows", "Android"]), "caret_image_clipboard.supported() on %s: %s" % [OS.get_name(), supported])
+	menu.open_at(Vector2(60.0, 40.0))
+	await _wait_toolbar(true)
+	_check(_button_ids().has(&"copy_image") == supported, "Copy image is in the menu where the clipboard can take an image (got %s)" % str(_button_ids()))
+	if supported:
+		_check(_toolbar.get_button_rect(&"copy_image").position.x < _toolbar.get_button_rect(&"save_image").position.x, "it comes first, before the app's own items")
+		DisplayServer.clipboard_set("text before")
+		await _press_button(&"copy_image")
+		for i: int in 600:
+			if not results.is_empty():
+				break
+			await _frames(1)
+		_check(results == [""], "pressing it copies the image (result %s)" % str(results))
+		_check(DisplayServer.clipboard_has_image(), "the clipboard now holds an image")
+		_check(not menu.is_open(), "and the menu closes")
+	# the toolbar's switch and the control's own settings
+	_toolbar.show_copy_image = false
+	menu.open_at(Vector2(60.0, 40.0))
+	await _wait_toolbar(true)
+	_check(not _button_ids().has(&"copy_image"), "show_copy_image = false hides it")
+	_toolbar.show_copy_image = true
+	_toolbar.set_control_actions(pic, [])
+	await _frames(4)
+	_check(not _button_ids().has(&"copy_image"), "set_control_actions(image, []) hides it for that image")
+	_toolbar.clear_control_settings(pic)
+	menu.close()
+	menu.detach()
+	await _frames(2)
+
+
+# A menu on a view whose own presses do something (a slider, a bit, a node of a MathDisplayGD
+# plot): is_interactive_at(point) keeps the long press away from those spots. A view without a
+# texture is copied as it is on screen.
+class ViewWithKnob extends ColorRect:
+	var presses: int = 0
+
+	func is_interactive_at(point: Vector2) -> bool:
+		return point.x < size.x * 0.5
+
+	func _gui_input(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed and is_interactive_at(event.position):
+			presses += 1
+
+
+func _test_image_menu_on_a_view() -> void:
+	print("\n== A menu on a view with interactive spots")
+	await _reset()
+	var view: ViewWithKnob = ViewWithKnob.new()
+	view.color = Color(0.1, 0.6, 0.2)
+	view.position = Vector2(80.0, 300.0)
+	view.size = Vector2(300.0, 160.0)
+	_root.add_child(view)
+	var menu: caret_image_menu = caret_image_menu.attach(view, [{"id": &"save_image", "text": "Save image"}])
+	await _frames(3)
+	var knob: Vector2 = view.global_position + Vector2(60.0, 80.0)
+	_mouse_move(knob)
+	_mouse_button(knob, true)
+	await get_tree().create_timer(menu.long_press_time + 0.2).timeout
+	_mouse_button(knob, false)
+	await _frames(30)
+	_check(not _toolbar.is_showing() and not menu.is_open(), "a long press on an interactive spot opens no menu")
+	_check(view.presses == 1, "and the view gets its press as usual (%d)" % view.presses)
+	var empty: Vector2 = view.global_position + Vector2(240.0, 80.0)
+	_mouse_move(empty)
+	_mouse_button(empty, true)
+	await get_tree().create_timer(menu.long_press_time + 0.2).timeout
+	_mouse_button(empty, false)
+	await _wait_toolbar(true)
+	_check(menu.is_open() and view.presses == 1, "a long press on an empty spot opens the menu, and the view does nothing")
+	var shot: Image = menu.get_image()
+	var mid: Color = shot.get_pixel(shot.get_width() / 2, shot.get_height() / 2) if shot != null else Color.BLACK
+	_check(shot != null and absf(float(shot.get_width()) / shot.get_height() - 300.0 / 160.0) < 0.05 and absf(mid.g - 0.6) < 0.05 and mid.r < 0.2, "a view without a texture is taken as it is on screen (%s, middle %s)" % [str(shot.get_size()) if shot != null else "none", mid])
+	menu.close()
+	menu.detach()
 	await _frames(2)
