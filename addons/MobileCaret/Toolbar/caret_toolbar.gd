@@ -29,6 +29,7 @@ const ACTION_SELECT_ALL: StringName = &"select_all"
 const ACTION_UNDO: StringName = &"undo"
 const ACTION_REDO: StringName = &"redo"
 const ACTION_SHARE: StringName = &"share"
+const ACTION_DELETE: StringName = &"delete"
 # Buttons that only open and close the overflow menu (no action_pressed signal).
 const ITEM_MORE: StringName = &"more"
 const ITEM_BACK: StringName = &"back"
@@ -67,6 +68,9 @@ const CLIPBOARD_CHECK_SECONDS: float = 0.5
 @export var text_copy: String = "Copy"
 @export var text_paste: String = "Paste"
 @export var text_select_all: String = "Select all"
+## Delete: removes the selected text without copying it. Off by default (like Share).
+@export var show_delete: bool = false
+@export var text_delete: String = "Delete"
 
 @export_group("Overflow menu")
 # The "more" button that opens Undo / Redo / Share.
@@ -195,7 +199,7 @@ func _process(delta: float) -> void:
 	if _is_pointer_down() and _pressed_action == &"":
 		_stable_time = 0.0
 
-	var wanted: bool = (_adapter.has_any_selection() or _caret_mode) and not _dismissed and _stable_time >= show_delay
+	var wanted: bool = (_adapter.has_any_selection() or _caret_mode) and not _dismissed and _stable_time >= show_delay and _adapter.menu_enabled()
 	if not wanted:
 		# Read the clipboard afresh the next time the toolbar shows.
 		_clipboard_known = false
@@ -223,6 +227,30 @@ func show_for_caret() -> void:
 	_signature = _make_signature()
 	_caret_signature = _signature
 	_stable_time = show_delay
+
+# The menu of one control. Settings are kept on the control (caret_menu_settings), so they work for
+# any control and go away with it.
+
+# Shows (true) or never shows (false) the menu for this control.
+func set_control_menu(control: Control, enabled: bool) -> void:
+	caret_menu_settings.set_menu_enabled(control, enabled)
+
+func is_control_menu_enabled(control: Control) -> bool:
+	return caret_menu_settings.is_menu_enabled(control)
+
+# The built-in buttons this control may have, for example [&"copy"] for a read-only note, or
+# [&"copy", &"cut", &"delete"]: cut, copy, paste, select_all, delete, undo, redo, share. Cut, Paste
+# and Delete still need text that can be edited, and the toolbar's own show_* switches still apply.
+func set_control_actions(control: Control, actions: Array) -> void:
+	caret_menu_settings.set_actions(control, actions)
+
+# The buttons set for this control; empty when none are set (it may have all of them).
+func get_control_actions(control: Control) -> Array:
+	return caret_menu_settings.get_actions(control)
+
+# Back to the defaults for this control: menu on, every button.
+func clear_control_settings(control: Control) -> void:
+	caret_menu_settings.clear(control)
 
 # Hides the toolbar until the selection or caret changes.
 func hide_toolbar() -> void:
@@ -469,22 +497,26 @@ func _build_entries() -> Array[Dictionary]:
 	var copyable: bool = has_selection and not secret
 	var editable: bool = _adapter.is_text_editable()
 	var main_row: Array[Dictionary] = []
-	if show_cut and copyable and editable:
+	# the control's own settings come on top of the toolbar's switches (set_control_actions)
+	var allows: Callable = _adapter.allows_action
+	if show_cut and copyable and editable and allows.call(ACTION_CUT):
 		main_row.append(_entry(ACTION_CUT, text_cut))
-	if show_copy and copyable:
+	if show_delete and has_selection and editable and _adapter.can_delete() and allows.call(ACTION_DELETE):
+		main_row.append(_entry(ACTION_DELETE, text_delete))
+	if show_copy and copyable and allows.call(ACTION_COPY):
 		main_row.append(_entry(ACTION_COPY, text_copy))
-	if show_paste and editable and _clipboard_has():
+	if show_paste and editable and allows.call(ACTION_PASTE) and _clipboard_has():
 		main_row.append(_entry(ACTION_PASTE, text_paste))
-	if show_select_all and not _adapter.is_empty() and not _is_everything_selected():
+	if show_select_all and not _adapter.is_empty() and not _is_everything_selected() and allows.call(ACTION_SELECT_ALL):
 		main_row.append(_entry(ACTION_SELECT_ALL, text_select_all))
 
 	var overflow: Array[Dictionary] = []
 	if show_overflow:
-		if editable and show_undo and _adapter.has_undo():
+		if editable and show_undo and _adapter.has_undo() and allows.call(ACTION_UNDO):
 			overflow.append(_entry(ACTION_UNDO, text_undo))
-		if editable and show_redo and _adapter.has_redo():
+		if editable and show_redo and _adapter.has_redo() and allows.call(ACTION_REDO):
 			overflow.append(_entry(ACTION_REDO, text_redo))
-		if show_share and copyable:
+		if show_share and copyable and allows.call(ACTION_SHARE):
 			overflow.append(_entry(ACTION_SHARE, text_share))
 
 	var specs: Array[Dictionary] = _custom_specs()
@@ -771,6 +803,8 @@ func _perform(action: StringName) -> void:
 			return
 		ACTION_CUT:
 			_adapter.cut()
+		ACTION_DELETE:
+			_adapter.delete_selection()
 		ACTION_COPY:
 			_adapter.copy()
 			# Like Android: the selection stays, the toolbar goes away until it changes.

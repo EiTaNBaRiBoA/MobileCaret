@@ -78,6 +78,19 @@ func cut() -> void:
 func paste() -> void:
 	_edit().menu_option(LineEdit.MENU_PASTE)
 
+func can_delete() -> bool:
+	return _edit().editable
+
+func delete_selection() -> void:
+	var edit: LineEdit = _edit()
+	if not edit.editable or not edit.has_selection():
+		return
+	var from: int = edit.get_selection_from_column()
+	edit.delete_text(from, edit.get_selection_to_column())
+	edit.deselect()
+	edit.caret_column = from
+	edit.text_changed.emit(edit.text)
+
 func select_all() -> void:
 	_edit().select_all()
 

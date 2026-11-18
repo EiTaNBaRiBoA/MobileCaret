@@ -96,6 +96,13 @@ func cut() -> void:
 func paste() -> void:
 	_edit().paste()
 
+func can_delete() -> bool:
+	return _edit().editable
+
+func delete_selection() -> void:
+	if _edit().editable:
+		_edit().delete_selection()
+
 func select_all() -> void:
 	_edit().select_all()
 

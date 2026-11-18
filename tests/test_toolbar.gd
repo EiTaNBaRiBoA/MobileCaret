@@ -10,6 +10,60 @@ var _root: Control
 var _saved_clipboard: String = ""
 
 
+# A custom control with selected text whose delegate chooses its own buttons (get_toolbar_actions).
+class ChoosyLabel extends Control:
+	var delegate: ChoosyDelegate = ChoosyDelegate.new()
+
+	func _init() -> void:
+		focus_mode = Control.FOCUS_ALL
+
+	func _get_caret_delegate() -> Object:
+		return delegate
+
+
+class ChoosyDelegate extends RefCounted:
+	var actions: Array = [&"copy"]
+
+	func supports_handles() -> bool:
+		return false
+
+	func is_text_editable() -> bool:
+		return true
+
+	func is_empty() -> bool:
+		return false
+
+	func has_selection() -> bool:
+		return true
+
+	func get_selection_from() -> Vector2i:
+		return Vector2i(0, 0)
+
+	func get_selection_to() -> Vector2i:
+		return Vector2i(4, 0)
+
+	func get_tip_local(pos: Vector2i) -> Vector2:
+		return Vector2(20.0 + pos.x * 12.0, 30.0)
+
+	func is_pos_visible(_pos: Vector2i) -> bool:
+		return true
+
+	func get_line_height() -> float:
+		return 24.0
+
+	func get_selected_text() -> String:
+		return "text"
+
+	func cut() -> void:
+		pass
+
+	func paste() -> void:
+		pass
+
+	func get_toolbar_actions() -> Array:
+		return actions
+
+
 func _ready() -> void:
 	_apply_window_args()
 	_controller = get_node("/root/MobileCaret") as carets_controller
@@ -32,6 +86,9 @@ func _ready() -> void:
 	await _test_review_fixes()
 	await _test_physical_size()
 	await _test_without_carets_controller()
+	await _test_control_menu_settings()
+	await _test_delete_button()
+	await _test_image_menu()
 
 	DisplayServer.clipboard_set(_saved_clipboard)
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -161,7 +218,7 @@ func _select_and_wait(control: Control, from: Vector2i, to: Vector2i) -> void:
 
 func _button_ids() -> Array[StringName]:
 	var ids: Array[StringName] = []
-	for action: StringName in [&"back", &"cut", &"copy", &"paste", &"select_all", &"undo", &"redo", &"share", &"more"]:
+	for action: StringName in [&"back", &"cut", &"delete", &"copy", &"paste", &"select_all", &"undo", &"redo", &"share", &"more"]:
 		if _toolbar.get_button_rect(action).size != Vector2.ZERO:
 			ids.append(action)
 	return ids
@@ -761,3 +818,147 @@ func _test_empty_field() -> void:
 	_check(_toolbar.is_showing() and _buttons_are([&"paste", &"more"]), "tapping the handle offers Paste (no Select all on empty text; got %s)" % str(_button_ids()))
 	await _press_button(&"paste")
 	_check(edit.text == "clip", "Paste fills the field (text '%s')" % edit.text)
+
+
+# Each control can have its own menu: switched off, or limited to some of the built-in buttons
+# (set from code, on any control; a custom control's delegate can answer get_toolbar_actions()).
+func _test_control_menu_settings() -> void:
+	print("\n== The menu of one control: on or off, and which buttons")
+	await _reset()
+	var plain: LineEdit = _line_edit("an ordinary field", Vector2(40.0, 200.0))
+	var limited: LineEdit = _line_edit("a field with only copy", Vector2(40.0, 400.0))
+	await _frames(2)
+	_toolbar.set_control_actions(limited, [&"copy"])
+	await _select_and_wait(limited, Vector2i(0, 0), Vector2i(7, 0))
+	_check(_buttons_are([&"copy"]), "set_control_actions limits the buttons of that control (got %s)" % str(_button_ids()))
+	await _select_and_wait(plain, Vector2i(0, 0), Vector2i(6, 0))
+	_check(_button_ids().has(&"cut") and _button_ids().has(&"paste"), "another control keeps all its buttons (got %s)" % str(_button_ids()))
+	_toolbar.set_control_menu(plain, false)
+	await _frames(6)
+	_check(not _toolbar.is_showing(), "set_control_menu(control, false) hides the menu of that control")
+	plain.select(0, 3)
+	await _frames(30)
+	_check(not _toolbar.is_showing(), "and it stays hidden when the selection changes")
+	_toolbar.set_control_menu(plain, true)
+	plain.select(0, 6)
+	await _wait_toolbar(true)
+	_check(_toolbar.is_showing(), "set_control_menu(control, true) brings it back")
+	_toolbar.clear_control_settings(limited)
+	await _select_and_wait(limited, Vector2i(0, 0), Vector2i(7, 0))
+	_check(_button_ids().has(&"cut"), "clear_control_settings gives a control all its buttons again (got %s)" % str(_button_ids()))
+	_check(_toolbar.get_control_actions(plain).is_empty() and _toolbar.is_control_menu_enabled(plain), "a control without settings: every button, menu on")
+	# a custom control's delegate can choose its buttons; a setting on the control wins
+	var choosy: ChoosyLabel = ChoosyLabel.new()
+	choosy.position = Vector2(40.0, 600.0)
+	choosy.size = Vector2(300.0, 60.0)
+	_root.add_child(choosy)
+	await _focus(choosy)
+	await _wait_toolbar(true)
+	_check(_buttons_are([&"copy"]), "a delegate's get_toolbar_actions() chooses its buttons (got %s)" % str(_button_ids()))
+	_toolbar.set_control_actions(choosy, [&"cut", &"copy"])
+	await _frames(4)
+	_check(_buttons_are([&"cut", &"copy"]), "set_control_actions on the control comes first (got %s)" % str(_button_ids()))
+	await _frames(2)
+
+
+# Delete removes the selected text (not to the clipboard). Off by default, like Share; only for
+# text that can be edited.
+func _test_delete_button() -> void:
+	print("\n== The Delete button")
+	await _reset()
+	var edit: LineEdit = _line_edit("delete this word", Vector2(40.0, 300.0))
+	var fixed: LineEdit = _line_edit("read only text", Vector2(40.0, 450.0))
+	fixed.editable = false
+	await _frames(2)
+	await _select_and_wait(edit, Vector2i(7, 0), Vector2i(12, 0))
+	_check(not _button_ids().has(&"delete"), "no Delete button by default")
+	_toolbar.show_delete = true
+	await _frames(4)
+	_check(_button_ids().has(&"delete"), "show_delete = true shows it for an editable selection (got %s)" % str(_button_ids()))
+	DisplayServer.clipboard_set("kept")
+	await _press_button(&"delete")
+	await _frames(3)
+	_check(edit.text == "delete word", "Delete removes the selected text (got '%s')" % edit.text)
+	_check(DisplayServer.clipboard_get() == "kept", "and leaves the clipboard alone")
+	await _select_and_wait(fixed, Vector2i(0, 0), Vector2i(4, 0))
+	_check(not _button_ids().has(&"delete"), "no Delete for text that cannot be edited")
+	var area: TextEdit = TextEdit.new()
+	area.text = "first line\nsecond line"
+	area.position = Vector2(40.0, 600.0)
+	area.size = Vector2(500.0, 120.0)
+	_root.add_child(area)
+	await _frames(2)
+	await _select_and_wait(area, Vector2i(0, 1), Vector2i(7, 1))
+	await _press_button(&"delete")
+	await _frames(3)
+	_check(area.text == "first line\nline", "Delete in a TextEdit too (got %s)" % area.text.c_escape())
+	_toolbar.show_delete = false
+	await _frames(2)
+
+
+# A long press on an image opens the menu with the items given for it (an app's "Save image").
+# There are no text buttons for an image, and no Copy: Godot cannot put an image on the clipboard.
+func _test_image_menu() -> void:
+	print("\n== A menu on an image (caret_image_menu)")
+	await _reset()
+	var img: Image = Image.create(200, 150, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.2, 0.5, 0.8))
+	var pic: TextureRect = TextureRect.new()
+	pic.texture = ImageTexture.create_from_image(img)
+	pic.position = Vector2(80.0, 300.0)
+	pic.size = Vector2(200.0, 150.0)
+	_root.add_child(pic)
+	var pressed: Array = []
+	var menu: caret_image_menu = caret_image_menu.attach(pic, [{"id": &"save_image", "text": "Save image"}])
+	menu.item_pressed.connect(func(id: StringName) -> void: pressed.append(id))
+	await _frames(2)
+	var at: Vector2 = pic.get_global_rect().get_center()
+	# a short tap opens nothing
+	await _click(at)
+	await _frames(30)
+	_check(not _toolbar.is_showing(), "a short tap on the image opens no menu")
+	# a press held still opens it (it shows once the finger is lifted, as for text)
+	_mouse_move(at)
+	_mouse_button(at, true)
+	await get_tree().create_timer(menu.long_press_time + 0.2).timeout
+	_mouse_button(at, false)
+	await _wait_toolbar(true)
+	_check(_toolbar.is_showing() and _toolbar.get_button_rect(&"save_image").size != Vector2.ZERO, "a long press on the image opens its menu with its items")
+	_check(_button_ids().is_empty(), "no text buttons (Cut, Copy, Select all) for an image (got %s)" % str(_button_ids()))
+	var item_rect: Rect2 = _toolbar.get_button_rect(&"save_image")
+	_check(item_rect.end.y <= at.y + 1.0, "the menu is above the finger (%.0f, finger at %.0f)" % [item_rect.end.y, at.y])
+	await _click(item_rect.get_center())
+	await _frames(4)
+	_check(pressed == [&"save_image"], "pressing an item tells the app (got %s)" % str(pressed))
+	_check(not _toolbar.is_showing() and not pic.has_focus(), "and the menu closes")
+	# a press held while the finger moves (a drag or pan) is not a long press
+	_mouse_move(at)
+	_mouse_button(at, true)
+	for i: int in 8:
+		_mouse_move(at + Vector2(6.0 * i, 0.0))
+		await _frames(2)
+	await get_tree().create_timer(menu.long_press_time + 0.1).timeout
+	_mouse_button(at + Vector2(42.0, 0.0), false)
+	await _frames(30)
+	_check(not _toolbar.is_showing(), "a press that moves (a pan) opens no menu")
+	# open, then a tap elsewhere closes it
+	_mouse_move(at)
+	_mouse_button(at, true)
+	await get_tree().create_timer(menu.long_press_time + 0.2).timeout
+	_mouse_button(at, false)
+	await _wait_toolbar(true)
+	await _click(Vector2(600.0, 700.0))
+	await _wait_toolbar(false)
+	_check(not _toolbar.is_showing() and not pic.has_focus(), "a tap elsewhere closes the image menu")
+	# switched off from code
+	_toolbar.set_control_menu(pic, false)
+	_mouse_move(at)
+	_mouse_button(at, true)
+	await get_tree().create_timer(menu.long_press_time + 0.2).timeout
+	_mouse_button(at, false)
+	await _frames(30)
+	_check(not _toolbar.is_showing(), "set_control_menu(image, false) switches the image menu off")
+	_toolbar.clear_control_settings(pic)
+	menu.detach()
+	_check(not pic.has_meta(caret_image_menu.META), "detach() removes it from the image")
+	await _frames(2)

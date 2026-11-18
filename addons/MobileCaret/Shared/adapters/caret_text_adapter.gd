@@ -266,6 +266,23 @@ func undo() -> void:
 func redo() -> void:
 	pass
 
+# Whether the menu may show for this control (MobileCaretToolbar.set_control_menu).
+func menu_enabled() -> bool:
+	return caret_menu_settings.is_menu_enabled(control)
+
+# Whether a built-in button (cut, copy, paste, select_all, delete, undo, redo, share) may show for
+# this control (MobileCaretToolbar.set_control_actions).
+func allows_action(action: StringName) -> bool:
+	return caret_menu_settings.allows(control, action)
+
+# Whether the selected text can be deleted from the menu (editable text controls).
+func can_delete() -> bool:
+	return false
+
+# Removes the selected text without putting it on the clipboard.
+func delete_selection() -> void:
+	pass
+
 # Extra toolbar buttons for this control: Dictionaries like the ones caret_toolbar.add_item()
 # takes ("id", "text", "index", "items", "when", "font", "icon"); no callback, the press arrives
 # in toolbar_item_pressed().

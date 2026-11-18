@@ -163,6 +163,19 @@ func cut() -> void:
 func paste() -> void:
 	_forward(&"paste", [], null)
 
+# The delegate's own list of built-in buttons (get_toolbar_actions), unless set on the control.
+func allows_action(action: StringName) -> bool:
+	if caret_menu_settings.has_actions(control) or not has(&"get_toolbar_actions"):
+		return super(action)
+	var actions: Variant = _forward(&"get_toolbar_actions", [], [])
+	return actions is Array and (actions as Array).has(action)
+
+func can_delete() -> bool:
+	return has(&"delete_selection") and is_text_editable()
+
+func delete_selection() -> void:
+	_forward(&"delete_selection", [], null)
+
 func select_all() -> void:
 	_forward(&"select_all", [], null)
 
