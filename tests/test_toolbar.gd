@@ -1014,7 +1014,7 @@ func _test_copy_image() -> void:
 	await _frames(2)
 
 
-# A menu on a view whose own presses do something (a slider, a bit, a node of a MathDisplayGD
+# A menu on a view whose own presses do something (a slider, a bit, a node of an interactive
 # plot): is_interactive_at(point) keeps the long press away from those spots. A view without a
 # texture is copied as it is on screen.
 class ViewWithKnob extends ColorRect:

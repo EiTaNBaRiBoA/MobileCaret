@@ -14,7 +14,7 @@
 # texture (a TextureRect), what its get_image() returns, what `image_source` returns, or else the
 # control as it is on screen when the menu opens.
 #
-# A view whose own presses do something (a slider, a node: MathDisplayGD's views) answers
+# A view whose own presses do something (a slider, a draggable point, a node of a graph) answers
 # is_interactive_at(point): a long press that starts on such a spot opens no menu, so the view works
 # as before.
 class_name caret_image_menu extends Node

@@ -381,6 +381,24 @@ func _test_text_edit_caret_positions() -> void:
 	edit.text = "%s NRZ: %s\n%s" % [HEBREW, LONG_HEBREW, LONG_HEBREW]
 	await _frames(3)
 	await _check_text_edit_positions(edit, "auto direction, the same words starting in Hebrew")
+	# Only Latin letters in a right-to-left layout: the rows are drawn on the right, and the handle
+	# was placed where the row would start on the left (the engine's rects ignore the alignment).
+	edit.text = "gghhhh\nplain latin text that is long enough to wrap onto a second row here\nabc 123"
+	await _frames(3)
+	await _check_text_edit_positions(edit, "auto direction, Latin only, RTL layout")
+	edit.text_direction = Control.TEXT_DIRECTION_LTR
+	await _frames(3)
+	await _check_text_edit_positions(edit, "text direction LTR, Latin only, RTL layout")
+	edit.text_direction = Control.TEXT_DIRECTION_AUTO
+	await _frames(3)
+	# and a handle dragged over that text lands on the letter under it
+	var latin_adapter: caret_text_adapter = caret_text_adapter.for_control(edit)
+	var missed: int = 0
+	for column: int in edit.get_line(0).length() + 1:
+		var tip: Vector2 = latin_adapter.get_tip_local(Vector2i(column, 0))
+		if latin_adapter.get_pos_at_local(tip - Vector2(0.0, latin_adapter.get_line_height() * 0.5)) != Vector2i(column, 0):
+			missed += 1
+	_check(missed == 0, "auto direction, Latin only, RTL layout: a point at each caret gives that caret back (%d missed)" % missed)
 	var auto_adapter: caret_text_edit_adapter = caret_text_adapter.for_control(edit) as caret_text_edit_adapter
 	var latin_first: String = "NRZ: %s" % HEBREW
 	var hebrew_first: String = "%s NRZ:" % HEBREW

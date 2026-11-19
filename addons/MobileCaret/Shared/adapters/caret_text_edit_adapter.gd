@@ -171,14 +171,15 @@ func _caret_top_left(pos: Vector2i) -> Vector2:
 
 #region Right-to-left and mixed-direction text
 
-# X of the caret (local space) for a position in a row that contains right-to-left text,
-# or NAN when the row is plain left-to-right (the engine rects are right there).
+# X of the caret (local space) for a position in a row that contains right-to-left text or sits in
+# a right-to-left layout, or NAN for a plain left-to-right row in a left-to-right layout (the
+# engine rects are right there).
 func _bidi_caret_x(pos: Vector2i) -> float:
 	var edit: TextEdit = _edit()
 	var line_text: String = edit.get_line(pos.y)
-	var direction: int = _text_direction()
-	if direction != TextServer.DIRECTION_RTL and not _has_rtl_text(line_text):
+	if not _needs_shaping(line_text):
 		return NAN
+	var direction: int = _text_direction()
 	# "Auto" is decided once per line (by its first strong letter), as the TextEdit shapes it, not
 	# per wrapped row: a line that starts with "NRZ:" stays left-to-right on its Hebrew rows too.
 	if direction == TextServer.DIRECTION_AUTO:
@@ -211,6 +212,13 @@ func _bidi_caret_x(pos: Vector2i) -> float:
 	if not is_nan(alternative_x):
 		last_alternative_x = origin + alternative_x
 	return origin + caret_x
+
+# Whether a line's caret positions are worked out here instead of taken from the engine: a line
+# with right-to-left text, any line in right-to-left text direction, and any line in a right-to-left
+# layout. There the rows are right-aligned, rows of Latin letters only too, but the engine's rects
+# for such a row are placed as if it started on the left (a handle far from an English answer).
+func _needs_shaping(line_text: String) -> bool:
+	return _text_direction() == TextServer.DIRECTION_RTL or _edit().is_layout_rtl() or _has_rtl_text(line_text)
 
 # Where text starts in a row: the left margin, the gutters, minus the horizontal scroll. In a
 # right-to-left layout the rows are right-aligned instead.
@@ -309,8 +317,7 @@ func is_pos_rtl(pos: Vector2i) -> bool:
 func _bidi_pos_at(line: int, local: Vector2) -> Vector2i:
 	var edit: TextEdit = _edit()
 	var line_text: String = edit.get_line(line)
-	var direction: int = _text_direction()
-	if line_text.is_empty() or (direction != TextServer.DIRECTION_RTL and not _has_rtl_text(line_text)):
+	if line_text.is_empty() or not _needs_shaping(line_text):
 		return Vector2i(-1, -1)
 	# The row: the shown row whose middle is closest to the point. Each row is measured on its own,
 	# so this also works when the line's first rows are scrolled out of view (a long paragraph).

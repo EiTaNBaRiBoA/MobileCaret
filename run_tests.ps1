@@ -1,7 +1,7 @@
 <#
 Runs every MobileCaret test.
 
-Layout (like GDLatex and MathDisplayGD): this repository folder sits inside a Godot project used for
+Layout: this repository folder sits inside a Godot project used for
 development, so the addon is at res://<repo folder>/addons/MobileCaret. The script creates that outer
 project when it is missing, imports it, checks that every script compiles under the strict warnings
 (an untyped or inferred variable is an error), and runs the test scenes in a window (handles,

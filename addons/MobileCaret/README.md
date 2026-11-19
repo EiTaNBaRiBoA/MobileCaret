@@ -16,7 +16,7 @@ Godot's built-in caret is a thin line that is hard to see and almost impossible 
 * **Auto-fading caret handle:** the single caret handle fades out after a few seconds of inactivity and returns when you tap or move the caret. Selection handles stay visible.
 * **Native caret hiding:** optionally hide Godot's own thin caret while a handle is shown, or only while dragging.
 * **Works with what you already have:** supports `LineEdit`, `TextEdit`, `CodeEdit` and the `LineEdit` inside a `SpinBox` (including wrapped text, scrolling, gutters, alignment, clear buttons, secret fields and different font sizes) without changing your scenes. The text control keeps focus, so the on-screen keyboard stays up while you drag.
-* **Right-to-left and mixed-direction text:** Hebrew, Arabic and mixed text get correctly placed handles, in left-to-right and right-to-left layouts.
+* **Right-to-left and mixed-direction text:** Hebrew, Arabic and mixed text get correctly placed handles, in left-to-right and right-to-left layouts, and so do lines of Latin letters only in a right-to-left layout (an English answer in a Hebrew app).
 * **Windows and SubViewports:** controls in a separate `Window`, an embedded window or a `SubViewport` get their handles and toolbar inside their own viewport.
 * **Multiple carets:** a `TextEdit` with several carets gets handles for every caret, each draggable on its own.
 * **Customizable:** use your own handle texture, size and color.
@@ -209,7 +209,8 @@ an `Image` or a `Texture2D`, for an image that changes), else the control's own 
 covers it): a plot, a diagram, any drawn view.
 
 **Interactive views.** A view whose own presses do something (a slider, a draggable point, a bit
-that flips, a node) answers `is_interactive_at(point: Vector2) -> bool` (MathDisplayGD's views do).
+that flips, a node) answers `is_interactive_at(point: Vector2) -> bool` (a plot, a graph or a
+simulation view, for example).
 A long press that starts on such a spot opens no menu, so the view works exactly as before; a long
 press on an empty spot opens the menu and does nothing in the view.
 
