@@ -298,7 +298,9 @@ func _update_handles() -> void:
 	for caret_index: int in count:
 		var first: caret_indicator = handles[caret_index * 2]
 		var second: caret_indicator = handles[caret_index * 2 + 1]
-		if _drag_handle != null and _drag_caret == caret_index:
+		# (only once the drag has moved: before that the held handle stays where it is; drawn at the
+		# caret, it stood at the other end when the start handle was held, and both turned inward)
+		if _drag_handle != null and _drag_caret == caret_index and _drag_moved:
 			# While dragging, the dragged handle sits at the native caret and its partner at the anchor.
 			var other: caret_indicator = second if _drag_handle == first else first
 			var caret: Vector2i = _adapter.get_caret(caret_index)

@@ -29,8 +29,39 @@ func _ready() -> void:
 	await _test_text_edit_scrolled_and_gutters()
 	await _test_text_edit_handles()
 	await _test_text_edit_rtl_hit_and_lean()
+	await _test_held_handle_keeps_its_lean()
 	print("\n%d checks, %d failures" % [_checks, _failures])
 	get_tree().quit(1 if _failures > 0 else 0)
+
+
+# A handle pressed and held before it moves: both handles keep pointing outward. The held handle was
+# drawn at the control's caret, which is the other end when the start handle is held (a selection
+# made left to right has its caret at the end), so both ends compared as one point and both handles
+# turned inward until the finger moved (seen on a tablet).
+func _test_held_handle_keeps_its_lean() -> void:
+	await _reset()
+	var edit: LineEdit = LineEdit.new()
+	edit.text = "hello there world"
+	edit.position = Vector2(40, 120)
+	edit.size = Vector2(420, 40)
+	_root.add_child(edit)
+	await _focus(edit)
+	edit.select(6, 11)
+	edit.caret_column = 11
+	await _frames(4)
+	var left: caret_indicator = _handle(0) if _handle(0).get_tip().x < _handle(1).get_tip().x else _handle(1)
+	var right: caret_indicator = _handle(1) if left == _handle(0) else _handle(0)
+	_check(left.style == caret_indicator.Style.LEFT and right.style == caret_indicator.Style.RIGHT, "a selection's handles point outward")
+	var start_pointer: Vector2 = left.global_position + left.size * 0.5
+	_mouse_move(start_pointer)
+	_mouse_button(start_pointer, true)
+	await _frames(4)
+	var held_ok: bool = left.style == caret_indicator.Style.LEFT and right.style == caret_indicator.Style.RIGHT
+	var held_tip: Vector2 = left.get_tip()
+	_check(held_ok and held_tip.distance_to(_tip_of(edit, Vector2i(6, 0))) < 1.5, "the start handle held still keeps its place and both still point outward (left %d, right %d)" % [left.style, right.style])
+	_mouse_button(start_pointer, false)
+	await _frames(3)
+	_check(left.style == caret_indicator.Style.LEFT and right.style == caret_indicator.Style.RIGHT and edit.get_selected_text() == "there", "released without moving: the same selection, handles outward (%s)" % edit.get_selected_text())
 
 
 #region Helpers
