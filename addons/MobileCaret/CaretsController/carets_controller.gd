@@ -553,7 +553,12 @@ func _step_drag(delta: float) -> void:
 	var to_local: Transform2D = control.get_global_transform_with_canvas().affine_inverse()
 	var local: Vector2 = to_local * (_drag_tip - caret_texture_offset)
 	local.y -= _adapter.get_line_height() * 0.5
-	var target: Vector2i = _adapter.get_drag_target(local, _adapter.get_caret(_drag_caret), delta)
+	var target: Vector2i
+	if _drag_has_anchor:
+		# the delegate is told which end stays put (it cannot always tell from the point)
+		target = _adapter.get_selection_drag_target(local, _drag_anchor, _adapter.get_caret(_drag_caret), delta)
+	else:
+		target = _adapter.get_drag_target(local, _adapter.get_caret(_drag_caret), delta)
 	if _drag_has_anchor:
 		_adapter.select(_drag_anchor, target, _drag_caret)
 	else:

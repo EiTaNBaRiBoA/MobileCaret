@@ -223,6 +223,12 @@ func get_row_x_extent(local_y: float) -> Vector2:
 func get_drag_target(local: Vector2, _current: Vector2i, _delta: float) -> Vector2i:
 	return get_pos_at_local(local)
 
+# The same while a selection handle is dragged: `anchor` is the end that stays put for the whole
+# drag. Text whose place under a point depends on the other end (a formula taken whole when a
+# handle reaches it) needs it: guessed from the point, it flipped from step to step.
+func get_selection_drag_target(local: Vector2, _anchor: Vector2i, current: Vector2i, delta: float) -> Vector2i:
+	return get_drag_target(local, current, delta)
+
 #endregion
 
 #region Toolbar actions

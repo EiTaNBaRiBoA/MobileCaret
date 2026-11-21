@@ -138,6 +138,11 @@ func get_drag_target(local: Vector2, current: Vector2i, delta: float) -> Vector2
 		return _forward(&"get_drag_target", [local, current, delta], current) as Vector2i
 	return get_pos_at_local(local)
 
+func get_selection_drag_target(local: Vector2, anchor: Vector2i, current: Vector2i, delta: float) -> Vector2i:
+	if has(&"get_selection_drag_target"):
+		return _forward(&"get_selection_drag_target", [local, anchor, current, delta], current) as Vector2i
+	return get_drag_target(local, current, delta)
+
 func is_secret() -> bool:
 	return bool(_forward(&"is_secret", [], false))
 

@@ -281,6 +281,7 @@ The delegate has any of the methods below, with the same names and parameters as
 | `has_selection()`, `get_selection_from()`, `get_selection_to()`, `select(anchor, caret)`, `deselect()` | Selection handles and the toolbar | No selection |
 | `select_word_at(pos)` | Long press | Nothing |
 | `get_drag_target(point, current, delta)`, `get_row_x_extent(y)` | Edge scrolling and clamping while dragging | `get_pos_at_local`, the base adapter's version |
+| `get_selection_drag_target(point, anchor, current, delta)` | A selection handle being dragged: `anchor` is the end that stays put for the whole drag. For text where the place under a point depends on the other end (a formula selected whole as soon as a handle reaches it); guessed from the point, the result flipped from step to step | `get_drag_target` |
 | `get_drag_rect()` | Where a dragged handle may go, in the control's coordinates. A control whose text goes on outside its own rectangle (a selection over several paragraphs of a page) returns that larger area | The control's own rectangle |
 | `get_caret_count()`, `merge_carets()` | Several carets | 1, nothing |
 | `supports_handles()` | `false` for a toolbar-only control (like a selectable label) | `true` |

@@ -21,6 +21,8 @@ var native_caret_hidden: bool = false
 # Toolbar items this control adds (see get_toolbar_items), and the ids pressed.
 var toolbar_items: Array = []
 var pressed_items: Array[StringName] = []
+# The end that stays put, as each step of a selection handle drag gave it (get_selection_drag_target).
+var drag_anchors: Array[int] = []
 
 
 class Delegate extends RefCounted:
@@ -90,6 +92,10 @@ class Delegate extends RefCounted:
 			if absf(field.x_of(i) - local.x) < absf(field.x_of(best) - local.x):
 				best = i
 		return Vector2i(best, 0)
+
+	func get_selection_drag_target(local: Vector2, anchor_pos: Vector2i, _current: Vector2i, _delta: float) -> Vector2i:
+		field.drag_anchors.append(anchor_pos.x)
+		return get_pos_at_local(local)
 
 	func get_text_version() -> int:
 		return field.text.hash()
