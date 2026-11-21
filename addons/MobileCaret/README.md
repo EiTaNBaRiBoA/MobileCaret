@@ -22,7 +22,7 @@ Godot's built-in caret is a thin line that is hard to see and almost impossible 
 * **Customizable:** use your own handle texture, size and color.
 * **Your own toolbar buttons:** add buttons (or a submenu) at the position you choose; index 0 is the leftmost.
 * **A menu for each control:** switch the menu off for one control, or choose which buttons it may have (only Copy for a note, Copy / Cut / Delete for a field), from code.
-* **Menus on images:** a long press on an image (or any control without text) opens the toolbar with a built-in **Copy image** (Android and Windows, from GDScript only) and the buttons you give it, such as "Save image". It stays away from the spots of an interactive view (a slider, a node) that answer `is_interactive_at()`.
+* **Menus on images:** a long press on an image (or any control without text) opens the toolbar with a built-in **Copy image** (Android and Windows, from GDScript only) and the buttons you give it, such as "Save image". It stays away from the spots of an interactive view (a slider, a node) that answer `is_interactive_at()`. On a view that draws its own text and makes it selectable (a caret delegate with `has_text_at()`), a long press on that text selects it with handles, and its menu has Copy, Select all and the image's buttons.
 * **Custom controls:** your own text or math editors get the handles and the toolbar too. Return a small delegate object from `_get_caret_delegate()`, with no dependency on MobileCaret, or register an adapter from code (see [Custom controls](#custom-controls)).
 
 ## Installation
@@ -213,6 +213,16 @@ that flips, a node) answers `is_interactive_at(point: Vector2) -> bool` (a plot,
 simulation view, for example).
 A long press that starts on such a spot opens no menu, so the view works exactly as before; a long
 press on an empty spot opens the menu and does nothing in the view.
+
+**Views that draw selectable text** (the numbers of a table, the words of a diagram). A view can
+also return a caret delegate from `_get_caret_delegate()` (see [Custom controls](#custom-controls))
+with `has_text_at(point: Vector2) -> bool`. A long press where it says there is text then selects
+the word there (`select_word_at`), the view takes the focus, and the handles and the toolbar come
+as for any text: Copy, Select all, and the image's buttons too (Copy image, and the items given to
+`attach`, through `caret_image_text_adapter`). A long press anywhere else opens the image's menu,
+and a tap on the view or elsewhere ends the selection (the delegate's `deselect()`). Copy image
+then copies the view as it was when the text was long-pressed, before the highlight.
+`select_text_at(point)`, `has_text_at(point)` and `is_text_open()` do the same from code.
 
 **Copy image** (`caret_image_clipboard`). Godot can read an image from the clipboard but has no call
 to write one, so MobileCaret asks the system, from GDScript only (no plugin):

@@ -91,6 +91,7 @@ func _ready() -> void:
 	await _test_image_menu()
 	await _test_copy_image()
 	await _test_image_menu_on_a_view()
+	await _test_image_menu_with_text()
 
 	DisplayServer.clipboard_set(_saved_clipboard)
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -1056,6 +1057,148 @@ func _test_image_menu_on_a_view() -> void:
 	var shot: Image = menu.get_image()
 	var mid: Color = shot.get_pixel(shot.get_width() / 2, shot.get_height() / 2) if shot != null else Color.BLACK
 	_check(shot != null and absf(float(shot.get_width()) / shot.get_height() - 300.0 / 160.0) < 0.05 and absf(mid.g - 0.6) < 0.05 and mid.r < 0.2, "a view without a texture is taken as it is on screen (%s, middle %s)" % [str(shot.get_size()) if shot != null else "none", mid])
+	menu.close()
+	menu.detach()
+	await _frames(2)
+
+
+# A view that draws its own words, made selectable with a caret delegate: one line, "abc def",
+# 20 px per character from x = 20, from y = 20 to 50, on the left of the view.
+class DrawnWords extends RefCounted:
+	var text: String = "abc def"
+	var anchor: int = 0
+	var caret: int = 0
+
+	func _x(column: int) -> float:
+		return 20.0 + 20.0 * column
+
+	func has_text_at(point: Vector2) -> bool:
+		var column: int = int(floor((point.x - 20.0) / 20.0))
+		return point.y >= 20.0 and point.y <= 50.0 and column >= 0 and column < text.length() and text[column] != " "
+
+	func supports_handles() -> bool:
+		return true
+
+	func is_text_editable() -> bool:
+		return false
+
+	func is_empty() -> bool:
+		return false
+
+	func get_caret() -> Vector2i:
+		return Vector2i(caret, 0)
+
+	func set_caret(pos: Vector2i) -> void:
+		anchor = pos.x
+		caret = pos.x
+
+	func select(from: Vector2i, to: Vector2i) -> void:
+		anchor = from.x
+		caret = to.x
+
+	func deselect() -> void:
+		anchor = caret
+
+	func has_selection() -> bool:
+		return anchor != caret
+
+	func get_selection_from() -> Vector2i:
+		return Vector2i(mini(anchor, caret), 0)
+
+	func get_selection_to() -> Vector2i:
+		return Vector2i(maxi(anchor, caret), 0)
+
+	func get_selected_text() -> String:
+		return text.substr(mini(anchor, caret), absi(caret - anchor))
+
+	func select_word_at(pos: Vector2i) -> void:
+		var from: int = pos.x
+		while from > 0 and text[from - 1] != " ":
+			from -= 1
+		var to: int = pos.x
+		while to < text.length() and text[to] != " ":
+			to += 1
+		anchor = from
+		caret = to
+
+	func get_pos_at_local(local: Vector2) -> Vector2i:
+		return Vector2i(clampi(roundi((local.x - 20.0) / 20.0), 0, text.length()), 0)
+
+	func get_tip_local(pos: Vector2i) -> Vector2:
+		return Vector2(_x(pos.x), 50.0)
+
+	func get_line_height() -> float:
+		return 30.0
+
+
+class ViewWithWords extends ColorRect:
+	var words: DrawnWords = DrawnWords.new()
+
+	func _get_caret_delegate() -> Object:
+		return words
+
+
+func _test_image_menu_with_text() -> void:
+	print("\n== A menu on a view that draws selectable text")
+	await _reset()
+	var view: ViewWithWords = ViewWithWords.new()
+	view.color = Color(0.95, 0.95, 0.9)
+	view.position = Vector2(80.0, 300.0)
+	view.size = Vector2(320.0, 160.0)
+	_root.add_child(view)
+	var pressed: Array = []
+	var menu: caret_image_menu = caret_image_menu.attach(view, [{"id": &"save_image", "text": "Save image"}])
+	menu.item_pressed.connect(func(id: StringName) -> void: pressed.append(id))
+	await _frames(3)
+	var on_word: Vector2 = view.global_position + Vector2(50.0, 35.0)
+	_check(menu.has_text_at(Vector2(50.0, 35.0)) and not menu.has_text_at(Vector2(250.0, 120.0)), "has_text_at: the delegate tells where the view's text is")
+	_mouse_move(on_word)
+	_mouse_button(on_word, true)
+	await get_tree().create_timer(menu.long_press_time + 0.2).timeout
+	_mouse_button(on_word, false)
+	await _wait_toolbar(true)
+	await _frames(4)
+	_check(menu.is_text_open() and not menu.is_open() and view.has_focus(), "a long press on the view's text selects it (not the image menu)")
+	_check(view.words.get_selected_text() == "abc", "the word under the finger is selected (got %s)" % view.words.get_selected_text())
+	var ids: Array[StringName] = _button_ids()
+	_check(ids.has(&"copy") and _toolbar.get_button_rect(&"save_image").size != Vector2.ZERO, "the menu has the text's Copy and the image's own items (got %s)" % str(ids))
+	_check(ids.has(&"copy_image") == caret_image_clipboard.supported(), "and Copy image where the clipboard can take an image (got %s)" % str(ids))
+	DisplayServer.clipboard_set("before")
+	await _press_button(&"copy")
+	await _frames(4)
+	_check(DisplayServer.clipboard_get() == "abc", "Copy puts the selected text on the clipboard (got %s)" % DisplayServer.clipboard_get())
+	# again, then the image's item from the same menu
+	_mouse_move(on_word)
+	_mouse_button(on_word, true)
+	await get_tree().create_timer(menu.long_press_time + 0.2).timeout
+	_mouse_button(on_word, false)
+	await _wait_toolbar(true)
+	await _frames(4)
+	var save_at: Rect2 = _toolbar.get_button_rect(&"save_image")
+	await _click(save_at.get_center())
+	await _frames(4)
+	_check(pressed == [&"save_image"], "the image's item works from the text menu (got %s)" % str(pressed))
+	_check(not menu.is_text_open() and not view.words.has_selection() and not view.has_focus(), "and the selection ends")
+	_check(menu.get_image() != null, "the image to save is there (taken when the text was long-pressed)")
+	# a tap on the view while its text is selected ends the selection
+	_mouse_move(on_word)
+	_mouse_button(on_word, true)
+	await get_tree().create_timer(menu.long_press_time + 0.2).timeout
+	_mouse_button(on_word, false)
+	await _wait_toolbar(true)
+	await _click(view.global_position + Vector2(250.0, 120.0))
+	await _wait_toolbar(false)
+	_check(not view.words.has_selection() and not view.has_focus() and not _toolbar.is_showing(), "a tap on the view ends the text selection")
+	# a long press away from the text: the image menu, as before
+	var blank: Vector2 = view.global_position + Vector2(250.0, 120.0)
+	_mouse_move(blank)
+	_mouse_button(blank, true)
+	await get_tree().create_timer(menu.long_press_time + 0.2).timeout
+	_mouse_button(blank, false)
+	await _wait_toolbar(true)
+	await _frames(4)
+	_check(menu.is_open() and not menu.is_text_open() and not view.words.has_selection(), "a long press away from the text opens the image menu")
+	_check(not _button_ids().has(&"copy") and _toolbar.get_button_rect(&"save_image").size != Vector2.ZERO, "with the image's items only (got %s)" % str(_button_ids()))
 	menu.close()
 	menu.detach()
 	await _frames(2)

@@ -17,6 +17,12 @@
 # A view whose own presses do something (a slider, a draggable point, a node of a graph) answers
 # is_interactive_at(point): a long press that starts on such a spot opens no menu, so the view works
 # as before.
+#
+# A view that draws its own text (the numbers of a table, the words of a diagram) can make that
+# text selectable with a caret delegate (`_get_caret_delegate()`, see caret_delegate_adapter) whose
+# has_text_at(point) says where text is. A long press on its text then selects the word there, with
+# handles, and the menu has the text's buttons (Copy, Select all) and the image's (Copy image and
+# the items given here); a long press anywhere else opens the image's menu as before.
 class_name caret_image_menu extends Node
 
 signal item_pressed(id: StringName)
@@ -41,6 +47,11 @@ var image_source: Callable = Callable()
 var _snapshot: Image = null
 
 var _open: bool = false
+var _text_open: bool = false
+var _press_while_text: bool = false
+# How many times a long press started selecting the text (a new one shows the menu again, even
+# on the same word as before).
+var _text_round: int = 0
 var _held: bool = false
 var _press_id: int = 0
 var _press_local: Vector2 = Vector2.ZERO
@@ -80,9 +91,13 @@ static func _adapter_for(control: Control) -> caret_text_adapter:
 	if not is_instance_valid(control) or not control.has_meta(META):
 		return null
 	var menu: Variant = control.get_meta(META)
-	if menu is caret_image_menu and is_instance_valid(menu):
-		return caret_image_adapter.new(control, menu as caret_image_menu)
-	return null
+	if not (menu is caret_image_menu and is_instance_valid(menu)):
+		return null
+	var image_menu: caret_image_menu = menu as caret_image_menu
+	var delegate: Object = image_menu._text_delegate()
+	if delegate != null and not image_menu.is_open():
+		return caret_image_text_adapter.new(control, delegate, image_menu)
+	return caret_image_adapter.new(control, image_menu)
 
 
 # Removes the menu from its image.
@@ -102,10 +117,61 @@ func is_open() -> bool:
 	return _open
 
 
+# Whether the image's text is being selected (after a long press on it).
+func is_text_open() -> bool:
+	return _text_open
+
+
+# Counts the long presses that selected the text.
+func get_text_round() -> int:
+	return _text_round
+
+
+# The image's caret delegate, when it has selectable text (see the class description), or null.
+func _text_delegate() -> Object:
+	if not is_instance_valid(image) or not image.has_method(caret_text_adapter.DELEGATE_METHOD):
+		return null
+	var delegate: Variant = image.call(caret_text_adapter.DELEGATE_METHOD)
+	return delegate as Object if delegate is Object and is_instance_valid(delegate) else null
+
+
+# Whether there is selectable text at a point of the image.
+func has_text_at(point: Vector2) -> bool:
+	var delegate: Object = _text_delegate()
+	return delegate != null and delegate.has_method(&"has_text_at") and bool(delegate.call(&"has_text_at", point))
+
+
+# Selects the word at a point of the image's text, as a long press there does: the handles and the
+# menu come with the focus.
+func select_text_at(point: Vector2) -> void:
+	var delegate: Object = _text_delegate()
+	if delegate == null or not caret_menu_settings.is_menu_enabled(image):
+		return
+	if image.has_focus():
+		image.release_focus()
+	menu_point = point
+	# Copy image takes the image as it is now, before the highlight and the handles cover it
+	_snapshot = null
+	if _own_image() == null:
+		_snapshot = _capture()
+	var pos: Variant = delegate.call(&"get_pos_at_local", point) if delegate.has_method(&"get_pos_at_local") else Vector2i.ZERO
+	if delegate.has_method(&"select_word_at"):
+		delegate.call(&"select_word_at", pos)
+	_text_open = true
+	_text_round += 1
+	_saved_focus_mode = image.focus_mode
+	if image.focus_mode == Control.FOCUS_NONE:
+		image.focus_mode = Control.FOCUS_CLICK
+	image.grab_focus()
+
+
 # Opens the menu at a point of the image (its own coordinates), as a long press there does.
 func open_at(point: Vector2) -> void:
 	if not is_instance_valid(image) or not caret_menu_settings.is_menu_enabled(image):
 		return
+	# from a text selection: that ends first (the menu then is the image's)
+	if image.has_focus():
+		image.release_focus()
 	menu_point = point
 	# a view drawn on screen is taken now, before the toolbar covers it
 	_snapshot = null
@@ -119,9 +185,14 @@ func open_at(point: Vector2) -> void:
 
 
 func close() -> void:
-	if not _open:
+	if not _open and not _text_open:
 		return
 	_open = false
+	if _text_open:
+		_text_open = false
+		var delegate: Object = _text_delegate()
+		if delegate != null and delegate.has_method(&"deselect"):
+			delegate.call(&"deselect")
 	if is_instance_valid(image):
 		if image.has_focus():
 			image.release_focus()
@@ -197,6 +268,7 @@ func _on_gui_input(event: InputEvent) -> void:
 			_held = false
 			return
 		_held = true
+		_press_while_text = _text_open
 		_press_local = local
 		_press_screen = on_screen
 		_image_at = image.get_global_transform_with_canvas().origin
@@ -204,6 +276,9 @@ func _on_gui_input(event: InputEvent) -> void:
 		var id: int = _press_id
 		get_tree().create_timer(long_press_time).timeout.connect(func() -> void: _long_press(id))
 	elif released:
+		# a tap on the image while its text is selected ends the selection, as on a page of text
+		if _held and _text_open and _press_while_text:
+			image.release_focus()
 		_held = false
 	elif _held and on_screen.distance_to(_press_screen) > move_limit:
 		_held = false
@@ -215,7 +290,10 @@ func _long_press(id: int) -> void:
 	_held = false
 	if image.get_global_transform_with_canvas().origin.distance_to(_image_at) > move_limit:
 		return
-	open_at(_press_local)
+	if has_text_at(_press_local):
+		select_text_at(_press_local)
+	else:
+		open_at(_press_local)
 
 
 # While open, a press anywhere but the image and the toolbar closes the menu.
