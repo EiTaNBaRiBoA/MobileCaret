@@ -1161,8 +1161,35 @@ func _test_image_menu_with_text() -> void:
 	_check(menu.is_text_open() and not menu.is_open() and view.has_focus(), "a long press on the view's text selects it (not the image menu)")
 	_check(view.words.get_selected_text() == "abc", "the word under the finger is selected (got %s)" % view.words.get_selected_text())
 	var ids: Array[StringName] = _button_ids()
-	_check(ids.has(&"copy") and _toolbar.get_button_rect(&"save_image").size != Vector2.ZERO, "the menu has the text's Copy and the image's own items (got %s)" % str(ids))
-	_check(ids.has(&"copy_image") == caret_image_clipboard.supported(), "and Copy image where the clipboard can take an image (got %s)" % str(ids))
+	var more_at: Rect2 = _toolbar.get_button_rect(caret_image_text_adapter.MORE_ID)
+	# On a phone the toolbar can lie over the view, and a finger comes as a mouse press (the toolbar
+	# takes it) and a touch (which reaches the view under the toolbar): that touch is not a tap on
+	# the view and must not end the selection.
+	var to_local: Transform2D = view.get_global_transform_with_canvas().affine_inverse()
+	for down: bool in [true, false]:
+		var touch: InputEventScreenTouch = InputEventScreenTouch.new()
+		touch.pressed = down
+		touch.position = to_local * more_at.get_center()
+		menu._on_gui_input(touch)
+	await _frames(2)
+	_check(menu.is_text_open() and view.words.has_selection() and view.has_focus(), "a touch on the toolbar over the view does not end the selection")
+	_check(ids.has(&"copy") and ids.has(&"select_all") and not ids.has(&"copy_image") and _toolbar.get_button_rect(&"save_image").size == Vector2.ZERO and more_at.size != Vector2.ZERO, "the main row has the text's buttons and ···; the image's buttons are not in it (got %s)" % str(ids))
+	await _click(more_at.get_center())
+	await _frames(4)
+	var copy_image_at: Rect2 = _toolbar.get_button_rect(caret_image_text_adapter.COPY_IMAGE_ID)
+	_check(_toolbar.get_button_rect(&"save_image").size != Vector2.ZERO and not _button_ids().has(&"copy"), "··· opens the image's items (got %s)" % str(_button_ids()))
+	_check((copy_image_at.size != Vector2.ZERO) == caret_image_clipboard.supported(), "with Copy image first where the clipboard can take an image")
+	if copy_image_at.size != Vector2.ZERO:
+		_check(copy_image_at.position.x < _toolbar.get_button_rect(&"save_image").position.x, "Copy image comes before the image menu's own items")
+	await _press_button(&"back")
+	await _frames(4)
+	_check(_button_ids().has(&"copy") and menu.is_text_open(), "‹ goes back to the text's buttons, the text still selected")
+	menu.image_items_in_more = false
+	await _frames(4)
+	_check(_toolbar.get_button_rect(&"save_image").size != Vector2.ZERO and _button_ids().has(&"copy_image") == caret_image_clipboard.supported(), "image_items_in_more = false puts them in the main row (got %s)" % str(_button_ids()))
+	menu.image_items_in_more = true
+	await _frames(4)
+	_check(_toolbar.get_button_rect(&"save_image").size == Vector2.ZERO and _toolbar.get_button_rect(&"copy").size != Vector2.ZERO, "and back under ··· when it is on again")
 	DisplayServer.clipboard_set("before")
 	await _press_button(&"copy")
 	await _frames(4)
@@ -1173,6 +1200,8 @@ func _test_image_menu_with_text() -> void:
 	await get_tree().create_timer(menu.long_press_time + 0.2).timeout
 	_mouse_button(on_word, false)
 	await _wait_toolbar(true)
+	await _frames(4)
+	await _click(_toolbar.get_button_rect(caret_image_text_adapter.MORE_ID).get_center())
 	await _frames(4)
 	var save_at: Rect2 = _toolbar.get_button_rect(&"save_image")
 	await _click(save_at.get_center())

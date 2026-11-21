@@ -21,8 +21,9 @@
 # A view that draws its own text (the numbers of a table, the words of a diagram) can make that
 # text selectable with a caret delegate (`_get_caret_delegate()`, see caret_delegate_adapter) whose
 # has_text_at(point) says where text is. A long press on its text then selects the word there, with
-# handles, and the menu has the text's buttons (Copy, Select all) and the image's (Copy image and
-# the items given here); a long press anywhere else opens the image's menu as before.
+# handles, and the menu has the text's buttons (Copy, Select all) and, under ···, the image's (Copy
+# image and the items given here; image_items_in_more); a long press anywhere else opens the
+# image's menu as before.
 class_name caret_image_menu extends Node
 
 signal item_pressed(id: StringName)
@@ -43,6 +44,10 @@ var move_limit: float = 12.0
 var menu_point: Vector2 = Vector2.ZERO
 # Returns the Image to copy (optional; see the class description for the other sources).
 var image_source: Callable = Callable()
+# While the image's text is selected, its buttons (Copy image and the items) are under one ··· button
+# of the text's menu (Copy, Select all, ···), so the menu stays short and full size on a phone.
+# Off: they are in the main row with the text's buttons.
+var image_items_in_more: bool = true
 
 var _snapshot: Image = null
 
@@ -262,6 +267,12 @@ func _on_gui_input(event: InputEvent) -> void:
 	var local: Vector2 = event.get(&"position")
 	# measured on the screen: a page that scrolls moves the image with the finger
 	var on_screen: Vector2 = image.get_global_transform_with_canvas() * local
+	# A finger on the toolbar laid over the image: the toolbar takes its mouse press, but the touch
+	# Godot also sends reaches the image under it. That press is the toolbar's, not the image's.
+	if (pressed or released) and _over_toolbar(on_screen):
+		_held = false
+		_press_while_text = false
+		return
 	if pressed:
 		# a spot whose press does something in the view (a slider, a node) is not for the menu
 		if image.has_method(&"is_interactive_at") and bool(image.call(&"is_interactive_at", local)):
@@ -282,6 +293,12 @@ func _on_gui_input(event: InputEvent) -> void:
 		_held = false
 	elif _held and on_screen.distance_to(_press_screen) > move_limit:
 		_held = false
+
+
+# Whether the toolbar is shown over a point of the image's viewport.
+func _over_toolbar(point: Vector2) -> bool:
+	var toolbar: Node = get_node_or_null(^"/root/MobileCaretToolbar")
+	return toolbar != null and toolbar.has_method(&"covers_point") and bool(toolbar.call(&"covers_point", point, image.get_viewport()))
 
 
 func _long_press(id: int) -> void:
