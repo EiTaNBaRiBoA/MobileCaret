@@ -324,8 +324,9 @@ its checks.
 ## Compatibility
 
 * Built and tested with Godot 4.7.
-* Handles respond to mouse input, so touch must be emulated as mouse input. This is Godot and Contributions
+* Handles respond to mouse input, so touch must be emulated as mouse input.
 
+## Contributions
 Bug reports, ideas and pull requests are welcome.
 
 ## License
