@@ -92,6 +92,7 @@ func _ready() -> void:
 	await _test_copy_image()
 	await _test_image_menu_on_a_view()
 	await _test_image_menu_with_text()
+	await _test_grid_submenu()
 
 	DisplayServer.clipboard_set(_saved_clipboard)
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -1230,4 +1231,48 @@ func _test_image_menu_with_text() -> void:
 	_check(not _button_ids().has(&"copy") and _toolbar.get_button_rect(&"save_image").size != Vector2.ZERO, "with the image's items only (got %s)" % str(_button_ids()))
 	menu.close()
 	menu.detach()
+	await _frames(2)
+
+
+# A submenu with more buttons than fit across the screen keeps them at full size and puts them in
+# rows of equal cells: it used to shrink the whole bar (down to 40%), and an Insert menu of nine
+# buttons was too small to tap on a phone.
+func _test_grid_submenu() -> void:
+	print("
+== A long submenu is a grid of full-size buttons")
+	await _reset()
+	var edit: LineEdit = _line_edit("grid check text", Vector2(40.0, 400.0))
+	await _frames(2)
+	await _focus(edit)
+	var pressed: Array[StringName] = []
+	var children: Array = []
+	for i: int in 24:
+		var id: StringName = StringName("cell_%d" % i)
+		children.append({"id": id, "text": "Item %d" % i, "callback": func(_c: Control) -> void: pressed.append(id)})
+	_toolbar.add_item(&"many", "Many", 0, Callable(), children)
+	_toolbar.show_for_caret()
+	await _wait_toolbar(true)
+	var main_height: float = _toolbar.get_toolbar_rect().size.y
+	_toolbar.open_submenu(&"many")
+	await _frames(3)
+	var bounds: Rect2 = get_viewport().get_visible_rect()
+	var bar: Rect2 = _toolbar.get_toolbar_rect()
+	_check(bar.size.x <= bounds.size.x and bounds.encloses(bar), "the submenu fits across the screen (%s in %s)" % [bar, bounds])
+	var heights: Array[float] = []
+	var widths: Array[float] = []
+	var tops: Dictionary = {}
+	for i: int in 24:
+		var r: Rect2 = _toolbar.get_button_rect(StringName("cell_%d" % i))
+		heights.append(r.size.y)
+		widths.append(r.size.x)
+		tops[int(round(r.position.y))] = true
+	_check(heights.all(func(h: float) -> bool: return absf(h - main_height) < 0.5), "every button keeps the main row's height (%.1f; got %s)" % [main_height, str(heights.slice(0, 3))])
+	_check(tops.size() >= 2, "the buttons wrap onto %d rows" % tops.size())
+	_check(widths.all(func(w: float) -> bool: return absf(w - widths[0]) < 0.5), "in cells of one width")
+	var last: Rect2 = _toolbar.get_button_rect(&"cell_23")
+	await _click(last.get_center())
+	await _frames(2)
+	_check(pressed == [&"cell_23"], "a button in a lower row is pressed (got %s)" % str(pressed))
+	_toolbar.remove_item(&"many")
+	edit.queue_free()
 	await _frames(2)

@@ -30,9 +30,15 @@ var pressed_color: Color = Color(1.0, 1.0, 1.0, 0.18):
 			pressed_color = value
 			queue_redraw()
 var separator_color: Color = Color(1.0, 1.0, 1.0, 0.18)
-# Height of the bar and font size, in logical pixels.
+# Height of the bar (of one row) and font size, in logical pixels.
 var bar_height: float = 40.0
 var font_size: int = 16
+# The widest the bar may be (0: no limit). Buttons that do not fit in one row go into a grid: rows
+# of cells of one width, at full size. Shrinking the bar instead made a long submenu (Insert,
+# Symbols) too small to tap on a phone.
+var max_width: float = 0.0
+# Rows the buttons take (1: one row).
+var rows: int = 1
 
 
 func _init() -> void:
@@ -47,19 +53,43 @@ func set_items(entries: Array[Dictionary]) -> void:
 	relayout()
 
 func relayout() -> void:
-	var x: float = 0.0
+	var widths: Array[float] = []
+	var total: float = 0.0
 	for item: Dictionary in items:
-		var text_width: float = _font_of(item).get_string_size(item["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
-		var icon: Texture2D = item.get("icon") as Texture2D
-		if icon != null:
-			text_width += _icon_size(icon).x + (font_size * 0.3 if item["text"] != "" else 0.0)
-		var width: float = text_width + bar_height * 0.9
-		item["rect"] = Rect2(x, 0.0, width, bar_height)
-		x += width
+		var width: float = button_width(item)
+		widths.append(width)
+		total += width
+	var bar_size: Vector2 = Vector2(total, bar_height)
+	rows = 1
+	if max_width > 0.0 and total > max_width and items.size() > 1:
+		# A grid: as many cells across as fit, the rows filled evenly (24 buttons in 5 columns
+		# would leave 4 in the last row; 5 rows of 5 and 4 keep them even).
+		var cell: float = 0.0
+		for width: float in widths:
+			cell = maxf(cell, width)
+		var columns: int = clampi(int(max_width / cell), 1, items.size())
+		rows = ceili(float(items.size()) / columns)
+		columns = ceili(float(items.size()) / rows)
+		for i: int in items.size():
+			items[i]["rect"] = Rect2((i % columns) * cell, floori(float(i) / columns) * bar_height, cell, bar_height)
+		bar_size = Vector2(columns * cell, rows * bar_height)
+	else:
+		var x: float = 0.0
+		for i: int in items.size():
+			items[i]["rect"] = Rect2(x, 0.0, widths[i], bar_height)
+			x += widths[i]
 	# The minimum size goes first: a Control's size can't be set below its current minimum.
-	custom_minimum_size = Vector2(x, bar_height)
-	size = Vector2(x, bar_height)
+	custom_minimum_size = bar_size
+	size = bar_size
 	queue_redraw()
+
+# The width a button takes in one row: its text (and icon) and its padding.
+func button_width(item: Dictionary) -> float:
+	var text_width: float = _font_of(item).get_string_size(item["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	var icon: Texture2D = item.get("icon") as Texture2D
+	if icon != null:
+		text_width += _icon_size(icon).x + (font_size * 0.3 if item["text"] != "" else 0.0)
+	return text_width + bar_height * 0.9
 
 func _font_of(item: Dictionary) -> Font:
 	var custom: Font = item.get("font") as Font
@@ -97,8 +127,11 @@ func _draw() -> void:
 			highlight.bg_color = pressed_color
 			highlight.set_corner_radius_all(radius)
 			draw_style_box(highlight, rect.grow(-1.0))
-		elif i > 0:
-			draw_line(Vector2(rect.position.x, rect.size.y * 0.25), Vector2(rect.position.x, rect.size.y * 0.75), separator_color, 1.0)
+		elif rect.position.x > 0.0:
+			draw_line(Vector2(rect.position.x, rect.position.y + rect.size.y * 0.25), Vector2(rect.position.x, rect.position.y + rect.size.y * 0.75), separator_color, 1.0)
+		if rect.position.y > 0.0 and i != pressed_index:
+			# a line between the rows of a grid
+			draw_line(Vector2(rect.position.x + rect.size.x * 0.12, rect.position.y), Vector2(rect.end.x - rect.size.x * 0.12, rect.position.y), separator_color, 1.0)
 		var text: String = items[i]["text"]
 		var text_size: Vector2 = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
 		var icon: Texture2D = items[i].get("icon") as Texture2D

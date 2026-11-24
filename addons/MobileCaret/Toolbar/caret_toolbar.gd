@@ -595,8 +595,10 @@ func _rebuild_items() -> bool:
 		_built_available = available
 		_panel.bar_height = desired_bar
 		_panel.font_size = maxi(int(desired_bar * 0.42), 8)
+		# Buttons that do not fit in one row go into a grid at full size (caret_toolbar_panel).
+		_panel.max_width = available
 		_panel.set_items(entries)
-		# A small viewport (relative to the screen) may be narrower than the bar: shrink to fit.
+		# Only a single button wider than the viewport (a tiny window) still shrinks the bar.
 		if available > 0.0 and _panel.size.x > available:
 			var factor: float = maxf(available / _panel.size.x, 0.4)
 			_panel.bar_height = desired_bar * factor
