@@ -93,6 +93,7 @@ func _ready() -> void:
 	await _test_image_menu_on_a_view()
 	await _test_image_menu_with_text()
 	await _test_grid_submenu()
+	await _test_menu_layout_settings()
 
 	DisplayServer.clipboard_set(_saved_clipboard)
 	print("\n%d checks, %d failures" % [_checks, _failures])
@@ -1234,45 +1235,210 @@ func _test_image_menu_with_text() -> void:
 	await _frames(2)
 
 
-# A submenu with more buttons than fit across the screen keeps them at full size and puts them in
-# rows of equal cells: it used to shrink the whole bar (down to 40%), and an Insert menu of nine
-# buttons was too small to tap on a phone.
+# Menus never shrink and are never cut off by the screen's width: a submenu that does not fit in
+# one row is a grid of full-size cells, up to 2 rows; a longer one is split into pages of 2 rows,
+# with › to the next page and ‹ to the previous one. Back (to the menu above) has its own sign, on
+# every page. The main row and the "···" menu stay one row, in pages of one row when they do not
+# fit. Shrinking the whole bar (down to 40%) made a 9-button Insert menu too small to tap on a phone.
 func _test_grid_submenu() -> void:
 	print("
-== A long submenu is a grid of full-size buttons")
+== Long menus: a grid of up to 2 rows, then pages")
 	await _reset()
 	var edit: LineEdit = _line_edit("grid check text", Vector2(40.0, 400.0))
 	await _frames(2)
 	await _focus(edit)
+	var back_sign: String = str(_toolbar.get("text_back"))
+	var prev_sign: String = str(_toolbar.get("text_page_prev"))
+	var next_sign: String = str(_toolbar.get("text_page_next"))
+	_check(back_sign != prev_sign and next_sign != prev_sign and prev_sign != "<null>", "back, previous page and next page have their own signs (%s %s %s)" % [back_sign, prev_sign, next_sign])
 	var pressed: Array[StringName] = []
-	var children: Array = []
-	for i: int in 24:
+	var many: Array = []
+	for i: int in 60:
 		var id: StringName = StringName("cell_%d" % i)
-		children.append({"id": id, "text": "Item %d" % i, "callback": func(_c: Control) -> void: pressed.append(id)})
-	_toolbar.add_item(&"many", "Many", 0, Callable(), children)
+		many.append({"id": id, "text": "Item %02d" % i, "callback": func(_c: Control) -> void: pressed.append(id)})
+	_toolbar.add_item(&"many", "Many", 0, Callable(), many)
 	_toolbar.show_for_caret()
 	await _wait_toolbar(true)
 	var main_height: float = _toolbar.get_toolbar_rect().size.y
+	var bounds: Rect2 = get_viewport().get_visible_rect()
 	_toolbar.open_submenu(&"many")
 	await _frames(3)
-	var bounds: Rect2 = get_viewport().get_visible_rect()
-	var bar: Rect2 = _toolbar.get_toolbar_rect()
-	_check(bar.size.x <= bounds.size.x and bounds.encloses(bar), "the submenu fits across the screen (%s in %s)" % [bar, bounds])
-	var heights: Array[float] = []
-	var widths: Array[float] = []
-	var tops: Dictionary = {}
-	for i: int in 24:
-		var r: Rect2 = _toolbar.get_button_rect(StringName("cell_%d" % i))
-		heights.append(r.size.y)
-		widths.append(r.size.x)
-		tops[int(round(r.position.y))] = true
-	_check(heights.all(func(h: float) -> bool: return absf(h - main_height) < 0.5), "every button keeps the main row's height (%.1f; got %s)" % [main_height, str(heights.slice(0, 3))])
-	_check(tops.size() >= 2, "the buttons wrap onto %d rows" % tops.size())
-	_check(widths.all(func(w: float) -> bool: return absf(w - widths[0]) < 0.5), "in cells of one width")
-	var last: Rect2 = _toolbar.get_button_rect(&"cell_23")
-	await _click(last.get_center())
+	# Page by page: every page fits the screen, has at most 2 rows of full-size cells, and starts
+	# with back; › leads on until the last page, which has none.
+	var seen: Array[StringName] = []
+	var pages: int = 0
+	var columns: int = 0
+	var shape_ok: bool = true
+	for guard: int in 40:
+		pages += 1
+		var ids: Array[StringName] = _row_ids()
+		var bar: Rect2 = _toolbar.get_toolbar_rect()
+		var tops: Dictionary = {}
+		var left_cells: int = 0
+		for id: StringName in ids:
+			var r: Rect2 = _toolbar.get_button_rect(id)
+			tops[int(round(r.position.y))] = true
+			if absf(r.size.y - main_height) > 0.5:
+				shape_ok = false
+			if int(round(r.position.y)) == int(round(bar.position.y)):
+				left_cells += 1
+		columns = maxi(columns, left_cells)
+		if not (bounds.encloses(bar) and tops.size() <= 2 and ids[0] == &"back" and (pages == 1) == not (&"page_prev" in ids)):
+			shape_ok = false
+		for id: StringName in ids:
+			if String(id).begins_with("cell_"):
+				seen.append(id)
+		if not (&"page_next" in ids):
+			break
+		await _press_button(&"page_next")
+		await _frames(3)
+	_check(shape_ok, "every page fits the screen, has up to 2 rows of full-size cells and starts with back (%d pages)" % pages)
+	var in_order: Array[StringName] = []
+	for i: int in 60:
+		in_order.append(StringName("cell_%d" % i))
+	_check(pages > 1 and seen == in_order, "› shows every button once, in order, over %d pages" % pages)
+	await _press_button(&"page_prev")
+	await _frames(3)
+	_check(&"page_next" in _row_ids() and not (&"cell_59" in _row_ids()), "‹ goes back a page")
+	await _press_button(&"page_next")
+	await _frames(3)
+	await _press_button(&"cell_59")
 	await _frames(2)
-	_check(pressed == [&"cell_23"], "a button in a lower row is pressed (got %s)" % str(pressed))
-	_toolbar.remove_item(&"many")
+	_check(pressed == [&"cell_59"], "a button on the last page is pressed (got %s)" % str(pressed))
+	# Cells take less padding than buttons in one row, so more of them fit across (a phone showed 3
+	# cells across, and a 9-button Insert menu needed 2 pages).
+	var panel: caret_toolbar_panel = _toolbar.get("_panel") as caret_toolbar_panel
+	var sample: Dictionary = {"id": &"x", "text": "Item 00"}
+	_check(panel.cell_width(sample) < panel.button_width(sample) - panel.bar_height * 0.3, "a grid cell has less padding than a button in a row (%.0f, %.0f)" % [panel.cell_width(sample), panel.button_width(sample)])
+	# A label with no Hebrew or Arabic letter is drawn left to right: in a right-to-left app Godot
+	# mirrored "›" into "‹".
+	_check(panel.label_direction("›") == TextServer.DIRECTION_LTR and panel.label_direction("↩") == TextServer.DIRECTION_LTR and panel.label_direction("a/b") == TextServer.DIRECTION_LTR, "a label without Hebrew is drawn left to right")
+	_check(panel.label_direction(String.chr(0x05D1) + String.chr(0x05D8) + String.chr(0x05DC)) == TextServer.DIRECTION_AUTO, "a Hebrew label keeps its own direction")
+	# A submenu that fits in 2 rows is one grid with no pages: one row of cells plus one more.
+	var two_rows: Array = many.slice(0, columns)
+	_toolbar.add_item(&"two", "Two", 0, Callable(), two_rows)
+	_toolbar.show_for_caret()
+	await _wait_toolbar(true)
+	_toolbar.open_submenu(&"two")
+	await _frames(3)
+	var two_ids: Array[StringName] = _row_ids()
+	var two_tops: Dictionary = {}
+	for id: StringName in two_ids:
+		two_tops[int(round(_toolbar.get_button_rect(id).position.y))] = true
+	_check(two_tops.size() == 2 and not (&"page_next" in two_ids) and two_ids.size() == columns + 1, "%d buttons and back fit in a grid of 2 rows, with no pages (%d rows, %s)" % [columns, two_tops.size(), str(two_ids.size())])
+	# A short submenu is one row.
+	_toolbar.add_item(&"few", "Few", 0, Callable(), many.slice(0, 3))
+	_toolbar.show_for_caret()
+	await _wait_toolbar(true)
+	_toolbar.open_submenu(&"few")
+	await _frames(3)
+	var few_tops: Dictionary = {}
+	for id: StringName in _row_ids():
+		few_tops[int(round(_toolbar.get_button_rect(id).position.y))] = true
+	_check(few_tops.size() == 1 and _row_ids().size() == 4, "a short submenu is one row")
+	_toolbar.open_submenu(&"")
+	for id: StringName in [&"many", &"two", &"few"]:
+		_toolbar.remove_item(id)
+	# The main row stays one row: buttons that do not fit go to pages of one row.
+	for i: int in 30:
+		_toolbar.add_item(StringName("main_%d" % i), "Main %02d" % i, -1)
+	_toolbar.show_for_caret()
+	await _wait_toolbar(true)
+	var main_seen: int = 0
+	var main_ok: bool = true
+	for guard: int in 40:
+		var ids: Array[StringName] = _row_ids()
+		var tops: Dictionary = {}
+		for id: StringName in ids:
+			var r: Rect2 = _toolbar.get_button_rect(id)
+			tops[int(round(r.position.y))] = true
+			if absf(r.size.y - main_height) > 0.5:
+				main_ok = false
+			if String(id).begins_with("main_"):
+				main_seen += 1
+		if tops.size() != 1 or not bounds.encloses(_toolbar.get_toolbar_rect()):
+			main_ok = false
+		if not (&"page_next" in ids):
+			break
+		await _press_button(&"page_next")
+		await _frames(3)
+	_check(main_ok and main_seen == 30, "the main row stays one row of full-size buttons, in pages (%d of 30 seen)" % main_seen)
+	for i: int in 30:
+		_toolbar.remove_item(StringName("main_%d" % i))
 	edit.queue_free()
 	await _frames(2)
+
+
+# What a menu too wide for the window does is a setting: pages (the default) with a number of rows
+# for submenus and for the main row, or the old shrinking, down to min_shrink.
+func _test_menu_layout_settings() -> void:
+	print("
+== Menu layout settings")
+	await _reset()
+	var edit: LineEdit = _line_edit("layout settings", Vector2(40.0, 400.0))
+	await _frames(2)
+	await _focus(edit)
+	var children: Array = []
+	for i: int in 60:
+		children.append({"id": StringName("set_%d" % i), "text": "Item %02d" % i})
+	_toolbar.add_item(&"set_menu", "Set", 0, Callable(), children)
+	_toolbar.show_for_caret()
+	await _wait_toolbar(true)
+	var full_height: float = _toolbar.get_toolbar_rect().size.y
+	_check(int(_toolbar.get("submenu_rows")) == 2 and int(_toolbar.get("main_rows")) == 1 and int(_toolbar.get("too_wide_menu")) == 0, "by default: pages, 2 rows for a submenu, 1 for the main row")
+	# 3 rows a page
+	_toolbar.set("submenu_rows", 3)
+	_toolbar.open_submenu(&"set_menu")
+	await _frames(3)
+	var tops: Dictionary = {}
+	for id: StringName in _row_ids():
+		tops[int(round(_toolbar.get_button_rect(id).position.y))] = true
+	_check(tops.size() == 3 and &"page_next" in _row_ids(), "submenu_rows 3: pages of 3 rows (%d rows)" % tops.size())
+	# the old way: one row, shrunk to fit, no pages (15 buttons: 60 would need a font below the
+	# smallest the bar draws)
+	_toolbar.open_submenu(&"")
+	_toolbar.add_item(&"set_menu", "Set", 0, Callable(), children.slice(0, 15))
+	_toolbar.set("too_wide_menu", 1)
+	_toolbar.set("min_shrink", 0.1)
+	_toolbar.show_for_caret()
+	await _wait_toolbar(true)
+	_toolbar.open_submenu(&"set_menu")
+	await _frames(3)
+	var bar: Rect2 = _toolbar.get_toolbar_rect()
+	_check(_row_ids().size() == 16 and not (&"page_next" in _row_ids()) and bar.size.y < full_height * 0.9 and get_viewport().get_visible_rect().encloses(bar), "too_wide_menu SHRINK: one smaller row with every button (%.0f of %.0f px tall)" % [bar.size.y, full_height])
+	_toolbar.set("min_shrink", 0.9)
+	_toolbar.open_submenu(&"")
+	_toolbar.open_submenu(&"set_menu")
+	await _frames(3)
+	_check(_toolbar.get_toolbar_rect().size.y >= full_height * 0.9 - 0.5, "min_shrink limits how small it gets")
+	_toolbar.set("too_wide_menu", 0)
+	_toolbar.set("min_shrink", 0.4)
+	_toolbar.set("submenu_rows", 2)
+	# the main row in 2 rows
+	_toolbar.open_submenu(&"")
+	_toolbar.remove_item(&"set_menu")
+	for i: int in 30:
+		_toolbar.add_item(StringName("row_%d" % i), "Main %02d" % i, -1)
+	_toolbar.set("main_rows", 2)
+	_toolbar.show_for_caret()
+	await _wait_toolbar(true)
+	var main_tops: Dictionary = {}
+	for id: StringName in _row_ids():
+		main_tops[int(round(_toolbar.get_button_rect(id).position.y))] = true
+	_check(main_tops.size() == 2, "main_rows 2: the main row takes 2 rows (%d)" % main_tops.size())
+	_toolbar.set("main_rows", 1)
+	for i: int in 30:
+		_toolbar.remove_item(StringName("row_%d" % i))
+	edit.queue_free()
+	await _frames(2)
+
+
+# The ids of the buttons shown now, in order.
+func _row_ids() -> Array[StringName]:
+	var ids: Array[StringName] = []
+	var panel: caret_toolbar_panel = _toolbar.get("_panel") as caret_toolbar_panel
+	if panel == null or not panel.visible:
+		return ids
+	for item: Dictionary in panel.items:
+		ids.append(item["id"] as StringName)
+	return ids

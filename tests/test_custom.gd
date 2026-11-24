@@ -400,6 +400,25 @@ func _row() -> Array[StringName]:
 		ids.append(item["id"] as StringName)
 	return ids
 
+# The buttons of the main row over all its pages (a row wider than the window goes to pages of one
+# row, with › and ‹), without the page buttons; back on the first page at the end.
+func _all_pages() -> Array[StringName]:
+	var ids: Array[StringName] = []
+	var pages: int = 0
+	for guard: int in 20:
+		for id: StringName in _row():
+			if id != &"page_next" and id != &"page_prev":
+				ids.append(id)
+		if not (&"page_next" in _row()):
+			break
+		await _press_button(&"page_next")
+		await _frames(3)
+		pages += 1
+	for back: int in pages:
+		await _press_button(&"page_prev")
+		await _frames(3)
+	return ids
+
 func _line_edit_with_selection() -> LineEdit:
 	var edit: LineEdit = LineEdit.new()
 	edit.text = "hello world"
@@ -424,7 +443,8 @@ func _test_toolbar_items() -> void:
 	_toolbar.add_item(&"last", "Last", -1)
 	_toolbar.add_item(&"only_selection", "Sel", 1, Callable(), [], "selection")
 	var edit: LineEdit = await _line_edit_with_selection()
-	_check(str(_row()) == str([&"first", &"only_selection", &"third", &"cut", &"copy", &"paste", &"select_all", &"last", &"more"]), "items go to their index (0 = leftmost), -1 goes last before ··· (got %s)" % str(_row()))
+	var whole_row: Array[StringName] = await _all_pages()
+	_check(str(whole_row) == str([&"first", &"only_selection", &"third", &"cut", &"copy", &"paste", &"select_all", &"last", &"more"]), "items go to their index (0 = leftmost), -1 goes last before ··· (got %s; the row is wider than this window, so it is read over its pages)" % str(whole_row))
 	var signals: Array = []
 	var on_item: Callable = func(id: StringName, control: Control) -> void: signals.append([id, control])
 	_toolbar.item_pressed.connect(on_item)
@@ -441,7 +461,8 @@ func _test_toolbar_items() -> void:
 	_check(not (&"only_selection" in _row()) and &"first" in _row(), "a \"selection\" item is hidden at a bare caret (got %s)" % str(_row()))
 	_toolbar.add_item(&"first", "Renamed", 3)
 	await _frames(3)
-	_check(_row().count(&"first") == 1 and _row().find(&"first") == 3, "adding an id again replaces the item (got %s)" % str(_row()))
+	var renamed_row: Array[StringName] = await _all_pages()
+	_check(renamed_row.count(&"first") == 1 and renamed_row.find(&"first") == 3, "adding an id again replaces the item (got %s)" % str(renamed_row))
 	_toolbar.remove_item(&"first")
 	await _frames(3)
 	_check(not (&"first" in _row()), "remove_item removes it")

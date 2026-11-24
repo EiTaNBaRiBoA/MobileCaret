@@ -111,12 +111,12 @@ If a control already has its own `caret_color` override, it is restored exactly 
 
 The toolbar (`addons/MobileCaret/Toolbar`) is a separate autoload, `MobileCaretToolbar`. Nothing in the handles' code depends on it: remove its autoload, or switch it off in code, and everything else works the same. If the `MobileCaret` controller is present the toolbar also listens to its `handle_tapped` signal; without it the toolbar still works from focus and selection alone. It works for `LineEdit`, `TextEdit`, `CodeEdit`, the `LineEdit` inside a `SpinBox` and selectable `RichTextLabel`s, and custom controls (see [Custom controls](#custom-controls)), in the main window and in any other `Window` or `SubViewport`. A `RichTextLabel` gets the toolbar only: Godot cannot set its selection from code, so there are no selection handles for it.
 
-* It appears above a selection once the selection has settled and no mouse button is held, so it stays out of the way while you drag a handle. If there is no room above, it goes below the selection, clear of the handles and the area they are grabbed in. It keeps its physical size, only shrinking when a small viewport is too narrow for it.
+* It appears above a selection once the selection has settled and no mouse button is held, so it stays out of the way while you drag a handle. If there is no room above, it goes below the selection, clear of the handles and the area they are grabbed in. It keeps its physical size and is never cut off by the window's edge. A menu too long for one row is laid out instead of shrunk: a submenu becomes a grid of cells of one width, up to 2 rows, and a longer one is split into pages of 2 rows with **›** (next page) and **‹** (previous page). The main row and the overflow menu stay one row, in pages of one row when they do not fit. Only a single button wider than the window still shrinks the bar. All of this can be changed from code (`too_wide_menu`, `submenu_rows`, `main_rows`, `min_shrink`, below), for example `MobileCaretToolbar.submenu_rows = 3`.
 * It only offers what applies: Cut and Paste need an editable control, Paste needs something on the clipboard, and Select all is hidden when everything is already selected. The clipboard is read when the toolbar appears and then about twice a second while it stays (on a phone each read is a call to the system), so text copied in another app adds Paste within half a second. A password field (`secret`) never offers Copy, Cut or Share.
 * Tapping a caret handle (without dragging) shows Paste / Select all at the caret.
 * Tapping inside an existing selection keeps the selection and shows or hides the toolbar, like Android.
 * After Copy the selection stays and the toolbar hides until the selection changes (or you tap it). Typing or moving the caret hides it too.
-* The **···** button opens an overflow menu with Undo, Redo and (optionally) Share; **‹** goes back.
+* The **···** button opens an overflow menu with Undo, Redo and (optionally) Share; **↩** goes back to the menu above (it has its own sign, since **‹** and **›** move between pages).
 * **Delete** (off by default, like Share) removes the selected text without copying it. It shows only for text that can be edited.
 
 Control it from code:
@@ -141,7 +141,12 @@ MobileCaretToolbar.share_requested.connect(func(text): print("share: ", text))
 | `show_delete`, `text_delete` | The Delete button (off by default) and its label. |
 | `show_copy_image`, `text_copy_image` | Copy image in the menu of an image (on by default; shown where the system clipboard can take an image) and its label. |
 | `show_overflow`, `show_undo`, `show_redo`, `show_share` | The overflow menu and its entries (Share is off by default). |
-| `text_undo`, `text_redo`, `text_share`, `text_more`, `text_back` | Labels for the overflow menu. |
+| `text_undo`, `text_redo`, `text_share`, `text_more`, `text_back` | Labels for the overflow menu; `text_back` (↩ by default) also leads out of a submenu. |
+| `text_page_prev`, `text_page_next` | The page buttons of a menu too long for the window (‹ and › by default). |
+| `too_wide_menu` | What a menu too wide for the window does: `PAGES` (the default) lays it out at full size in rows of cells and pages; `SHRINK` keeps one row and makes the whole bar smaller. |
+| `submenu_rows` | Rows a page of a submenu may take with `PAGES` (2 by default; 1 gives pages of one row). Each page is a grid: these rows, and as many columns as fit. |
+| `main_rows` | The same for the main row and the overflow menu (1 by default). |
+| `min_shrink` | The smallest the bar gets, as a share of its size (0.4 by default): with `SHRINK`, and when a single button is wider than the window. |
 | `tap_selection_toggles_toolbar` | Tapping inside a selection keeps it and toggles the toolbar (default on). Turn off to let such taps collapse the selection as usual. |
 | `height_mm` | Height of the bar in millimeters (default 7.5, like the platform text toolbar). Like the handles it keeps this physical size on any screen. |
 | `gap_mm` | Gap between the bar and the selection. |
@@ -150,7 +155,7 @@ MobileCaretToolbar.share_requested.connect(func(text): print("share: ", text))
 
 #### Your own buttons
 
-Add buttons to the toolbar and choose where they go. `index` is the position in the main row: 0 is the leftmost, and the built-in buttons move to the right. `-1` (the default) puts the button last, just before **···**. A button with children opens them as a submenu, with **‹** to go back.
+Add buttons to the toolbar and choose where they go. `index` is the position in the main row: 0 is the leftmost, and the built-in buttons move to the right. `-1` (the default) puts the button last, just before **···**. A button with children opens them as a submenu, with **↩** to go back.
 
 ```gdscript
 # One button, first in the row. The callback gets the focused control.
@@ -175,7 +180,7 @@ MobileCaretToolbar.clear_items()
 | `text` | The label. |
 | `index` | 0 = leftmost, -1 = last. Buttons with the same index keep the order they were added in. |
 | `callback` | Called with the focused control when the button is pressed. |
-| `children` | Dictionaries with the same keys (`id`, `text`, `callback`, `items`, `font`, `icon`). The button then opens a submenu. A child with `items` of its own opens a deeper submenu; ‹ goes back one level at a time. |
+| `children` | Dictionaries with the same keys (`id`, `text`, `callback`, `items`, `font`, `icon`). The button then opens a submenu. A child with `items` of its own opens a deeper submenu; ↩ goes back one level at a time. |
 | `when` | `"always"` (default), `"selection"` (only while text is selected) or `"caret"` (only without a selection). |
 | `font`, `icon` | An optional font for the label (for example one with special symbols), and an optional `Texture2D` shown before the label (or alone, with an empty label). |
 

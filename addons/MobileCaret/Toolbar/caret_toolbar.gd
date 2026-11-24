@@ -34,6 +34,9 @@ const ACTION_COPY_IMAGE: StringName = &"copy_image"
 # Buttons that only open and close the overflow menu (no action_pressed signal).
 const ITEM_MORE: StringName = &"more"
 const ITEM_BACK: StringName = &"back"
+# Buttons that move between the pages of a menu too long for the screen.
+const ITEM_PAGE_NEXT: StringName = &"page_next"
+const ITEM_PAGE_PREV: StringName = &"page_prev"
 const PANEL_LAYER_NAME: String = "MobileCaretToolbar"
 const CONTROLLER_GROUP: StringName = &"mobile_caret_controller"
 # A press that moves less than this (in millimeters) and ends within TAP_SECONDS is a tap.
@@ -87,15 +90,30 @@ const CLIPBOARD_CHECK_SECONDS: float = 0.5
 @export var text_redo: String = "Redo"
 @export var text_share: String = "Share"
 @export var text_more: String = "···"
-@export var text_back: String = "‹"
+# Back to the menu above. Its own sign: ‹ and › move between the pages of a long menu.
+@export var text_back: String = "↩"
+@export var text_page_prev: String = "‹"
+@export var text_page_next: String = "›"
 
 @export_group("Look")
 # Height of the bar in millimeters. Like the caret handles, it keeps this physical size on screen
-# whatever the resolution, aspect ratio, stretch mode or DPI (it only shrinks when it would not
-# fit the width of a small viewport).
+# whatever the resolution, aspect ratio, stretch mode or DPI. A menu too long for the screen is a
+# grid and pages instead (it only shrinks when a single button is wider than the viewport).
 @export var height_mm: float = 7.5
 # Gap between the toolbar and the selection, in millimeters.
 @export var gap_mm: float = 2.0
+# What a menu too wide for the window does. PAGES: it is laid out at full size, in rows of cells
+# (up to submenu_rows or main_rows), and what still does not fit goes to further pages with ‹ and ›.
+# SHRINK: it stays one row and the whole bar gets smaller (down to min_shrink).
+enum TooWideMenu { PAGES, SHRINK }
+@export var too_wide_menu: TooWideMenu = TooWideMenu.PAGES
+# Rows a page of a submenu may take (PAGES). 1: pages of one row.
+@export_range(1, 8) var submenu_rows: int = 2
+# Rows a page of the main row and of the ··· menu may take (PAGES).
+@export_range(1, 8) var main_rows: int = 1
+# The smallest the bar gets (a share of its size) with SHRINK, and when a single button is wider
+# than the window.
+@export_range(0.1, 1.0) var min_shrink: float = 0.4
 @export var background_color: Color = Color(0.13, 0.14, 0.17, 0.97)
 @export var text_color: Color = Color.WHITE
 @export var pressed_color: Color = Color(1.0, 1.0, 1.0, 0.18)
@@ -133,6 +151,7 @@ var _viewport_pressed: bool = false
 # What the panel was last laid out for: bar height and available width (to re-fit on change).
 var _built_bar: float = 0.0
 var _built_available: float = 0.0
+var _built_layout: String = ""
 # A possible tap on the selection: where it started, when, and the selection to keep.
 var _tap_start: Vector2 = Vector2.ZERO
 var _tap_time: int = 0
@@ -150,6 +169,9 @@ var _replaying: bool = false
 # the one shown (empty when the main row shows). A submenu's items may open submenus too.
 var _custom_items: Array[Dictionary] = []
 var _submenu_path: Array[StringName] = []
+# The page shown of a menu too long for the screen, and the menu it belongs to.
+var _page: int = 0
+var _page_key: String = ""
 # Whether the system clipboard has text, as last read (see _clipboard_has), and how long ago.
 var _clipboard_known: bool = false
 var _clipboard_full: bool = false
@@ -583,8 +605,15 @@ func _rebuild_items() -> bool:
 	_panel.background_color = background_color
 	_panel.text_color = text_color
 	_panel.pressed_color = pressed_color
-	# Only rebuild (and re-measure) when the buttons or the sizes changed.
-	var same: bool = _panel.items.size() == entries.size() and is_equal_approx(_built_bar, desired_bar) and is_equal_approx(_built_available, available)
+	# Full size: a menu that does not fit is laid out in rows and pages (_page_of), unless the
+	# too_wide_menu setting asks for the smaller bar.
+	_panel.bar_height = desired_bar
+	_panel.font_size = maxi(int(desired_bar * 0.42), 8)
+	var rows: int = _rows_allowed()
+	entries = _page_of(entries, available, rows)
+	var layout: String = "%d/%d/%.3f" % [too_wide_menu, rows, min_shrink]
+	# Only rebuild (and re-measure) when the buttons, the sizes or the layout settings changed.
+	var same: bool = _panel.items.size() == entries.size() and is_equal_approx(_built_bar, desired_bar) and is_equal_approx(_built_available, available) and layout == _built_layout
 	if same:
 		for i: int in entries.size():
 			if _panel.items[i]["id"] != entries[i]["id"] or _panel.items[i]["text"] != entries[i]["text"]:
@@ -593,18 +622,91 @@ func _rebuild_items() -> bool:
 	if not same:
 		_built_bar = desired_bar
 		_built_available = available
-		_panel.bar_height = desired_bar
-		_panel.font_size = maxi(int(desired_bar * 0.42), 8)
-		# Buttons that do not fit in one row go into a grid at full size (caret_toolbar_panel).
-		_panel.max_width = available
+		_built_layout = layout
+		# A page allowed more than one row that does not fit in one is a grid (caret_toolbar_panel).
+		_panel.max_width = available if rows > 1 else 0.0
 		_panel.set_items(entries)
-		# Only a single button wider than the viewport (a tiny window) still shrinks the bar.
+		# Shrink: with SHRINK, or when a single button is wider than the viewport (a tiny window).
 		if available > 0.0 and _panel.size.x > available:
-			var factor: float = maxf(available / _panel.size.x, 0.4)
+			var factor: float = maxf(available / _panel.size.x, min_shrink)
 			_panel.bar_height = desired_bar * factor
 			_panel.font_size = maxi(int(desired_bar * factor * 0.42), 6)
 			_panel.relayout()
 	return true
+
+# The buttons of the page shown now. A submenu takes up to submenu_rows rows of cells (a grid), the
+# main row and the ··· menu up to main_rows (one row by default). What does not fit goes to further
+# pages, with ‹ and › to move between them, and back stays first on every page. Nothing is cut off
+# by the screen's edge, and nothing gets smaller: only a single button wider than the screen still
+# shrinks the bar (and every menu does with too_wide_menu SHRINK).
+# Rows a page of the menu shown now may take (PAGES; 1 with SHRINK).
+func _rows_allowed() -> int:
+	if too_wide_menu == TooWideMenu.SHRINK:
+		return 1
+	return maxi(1, submenu_rows if not _submenu_path.is_empty() else main_rows)
+
+func _page_of(entries: Array[Dictionary], available: float, rows: int) -> Array[Dictionary]:
+	var key: String = str(_submenu_path) + ("+more" if _overflow_open else "")
+	if key != _page_key:
+		_page_key = key
+		_page = 0
+	if available <= 0.0 or too_wide_menu == TooWideMenu.SHRINK:
+		return entries
+	var fixed: Array[Dictionary] = []
+	var rest: Array[Dictionary] = entries.duplicate()
+	if not rest.is_empty() and rest[0]["id"] == ITEM_BACK:
+		fixed.append(rest.pop_front())
+	var prev: Dictionary = _entry(ITEM_PAGE_PREV, text_page_prev)
+	var next: Dictionary = _entry(ITEM_PAGE_NEXT, text_page_next)
+	var pages: Array = []
+	if rows > 1:
+		# Cells of one width, as many across as fit, `rows` rows a page.
+		var cell: float = maxf(_panel.cell_width(prev), _panel.cell_width(next))
+		for entry: Dictionary in entries:
+			cell = maxf(cell, _panel.cell_width(entry))
+		var capacity: int = maxi(1, int(available / cell)) * rows
+		if entries.size() <= capacity:
+			return entries
+		var i: int = 0
+		while i < rest.size():
+			var slots: int = capacity - fixed.size() - (1 if not pages.is_empty() else 0)
+			var take: int = slots if rest.size() - i <= slots else slots - 1
+			take = maxi(1, take)
+			pages.append(rest.slice(i, i + take))
+			i += take
+	else:
+		var total: float = 0.0
+		for entry: Dictionary in entries:
+			total += _panel.button_width(entry)
+		if total <= available:
+			return entries
+		# One row a page, filled by the buttons' own widths.
+		var fixed_width: float = 0.0
+		for entry: Dictionary in fixed:
+			fixed_width += _panel.button_width(entry)
+		var i: int = 0
+		while i < rest.size():
+			var room: float = available - fixed_width - (_panel.button_width(prev) if not pages.is_empty() else 0.0)
+			var page: Array[Dictionary] = []
+			var used: float = 0.0
+			while i < rest.size():
+				var width: float = _panel.button_width(rest[i])
+				var reserve: float = _panel.button_width(next) if i + 1 < rest.size() else 0.0
+				if not page.is_empty() and used + width + reserve > room:
+					break
+				page.append(rest[i])
+				used += width
+				i += 1
+			pages.append(page)
+	_page = clampi(_page, 0, pages.size() - 1)
+	var shown: Array[Dictionary] = fixed.duplicate()
+	if _page > 0:
+		shown.append(prev)
+	for entry: Dictionary in pages[_page]:
+		shown.append(entry)
+	if _page < pages.size() - 1:
+		shown.append(next)
+	return shown
 
 # Positions the toolbar above the selection (or caret), below it when there is no room above.
 func _place() -> void:
@@ -793,7 +895,7 @@ func _toggle_for_tap() -> void:
 func _perform(action: StringName) -> void:
 	if _adapter == null or not _adapter.is_valid():
 		return
-	if action != ITEM_BACK and action != ITEM_MORE:
+	if action != ITEM_BACK and action != ITEM_MORE and action != ITEM_PAGE_NEXT and action != ITEM_PAGE_PREV:
 		var custom: Dictionary = _find_spec(action, _custom_specs())
 		if not custom.is_empty():
 			_perform_custom(action, custom)
@@ -801,6 +903,12 @@ func _perform(action: StringName) -> void:
 	match action:
 		ITEM_MORE:
 			_overflow_open = true
+			return
+		ITEM_PAGE_NEXT:
+			_page += 1
+			return
+		ITEM_PAGE_PREV:
+			_page = maxi(0, _page - 1)
 			return
 		ITEM_BACK:
 			# One level up: from a submenu to the one it was opened from, or to the main row.

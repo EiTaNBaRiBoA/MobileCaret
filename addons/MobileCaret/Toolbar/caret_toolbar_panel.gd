@@ -65,8 +65,8 @@ func relayout() -> void:
 		# A grid: as many cells across as fit, the rows filled evenly (24 buttons in 5 columns
 		# would leave 4 in the last row; 5 rows of 5 and 4 keep them even).
 		var cell: float = 0.0
-		for width: float in widths:
-			cell = maxf(cell, width)
+		for item: Dictionary in items:
+			cell = maxf(cell, cell_width(item))
 		var columns: int = clampi(int(max_width / cell), 1, items.size())
 		rows = ceili(float(items.size()) / columns)
 		columns = ceili(float(items.size()) / rows)
@@ -85,11 +85,29 @@ func relayout() -> void:
 
 # The width a button takes in one row: its text (and icon) and its padding.
 func button_width(item: Dictionary) -> float:
-	var text_width: float = _font_of(item).get_string_size(item["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	return _content_width(item) + bar_height * 0.9
+
+# The width of a cell of a grid holding this button: less padding than in a row (the cells are as
+# wide as the widest button, so the narrow ones have room around them anyway).
+func cell_width(item: Dictionary) -> float:
+	return _content_width(item) + bar_height * 0.45
+
+func _content_width(item: Dictionary) -> float:
+	var text_width: float = _font_of(item).get_string_size(item["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, TextServer.JUSTIFICATION_NONE, label_direction(item["text"])).x
 	var icon: Texture2D = item.get("icon") as Texture2D
 	if icon != null:
 		text_width += _icon_size(icon).x + (font_size * 0.3 if item["text"] != "" else 0.0)
-	return text_width + bar_height * 0.9
+	return text_width
+
+# The direction a label is drawn in: left to right when it has no Hebrew or Arabic letter. Godot's
+# automatic direction falls back to the app's (right to left in a Hebrew app) for a label with no
+# letter, and mirrored "›" into "‹".
+func label_direction(text: String) -> TextServer.Direction:
+	for i: int in text.length():
+		var c: int = text.unicode_at(i)
+		if (c >= 0x0590 and c <= 0x08FF) or (c >= 0xFB1D and c <= 0xFDFF) or (c >= 0xFE70 and c <= 0xFEFF):
+			return TextServer.DIRECTION_AUTO
+	return TextServer.DIRECTION_LTR
 
 func _font_of(item: Dictionary) -> Font:
 	var custom: Font = item.get("font") as Font
@@ -133,7 +151,8 @@ func _draw() -> void:
 			# a line between the rows of a grid
 			draw_line(Vector2(rect.position.x + rect.size.x * 0.12, rect.position.y), Vector2(rect.end.x - rect.size.x * 0.12, rect.position.y), separator_color, 1.0)
 		var text: String = items[i]["text"]
-		var text_size: Vector2 = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
+		var direction: TextServer.Direction = label_direction(text)
+		var text_size: Vector2 = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, TextServer.JUSTIFICATION_NONE, direction)
 		var icon: Texture2D = items[i].get("icon") as Texture2D
 		var content_width: float = text_size.x
 		if icon != null:
@@ -144,4 +163,4 @@ func _draw() -> void:
 			draw_texture_rect(icon, Rect2(Vector2(left, rect.position.y + (rect.size.y - icon_size.y) * 0.5), icon_size), false, text_color)
 			left += icon_size.x + (font_size * 0.3 if text != "" else 0.0)
 		var baseline: float = rect.position.y + (rect.size.y + font.get_ascent(font_size) - font.get_descent(font_size)) * 0.5
-		draw_string(font, Vector2(left, baseline), text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color)
+		draw_string(font, Vector2(left, baseline), text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, text_color, TextServer.JUSTIFICATION_NONE, direction)
