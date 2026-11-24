@@ -90,7 +90,7 @@ func button_width(item: Dictionary) -> float:
 # The width of a cell of a grid holding this button: less padding than in a row (the cells are as
 # wide as the widest button, so the narrow ones have room around them anyway).
 func cell_width(item: Dictionary) -> float:
-	return _content_width(item) + bar_height * 0.45
+	return _content_width(item) + bar_height * 0.3
 
 func _content_width(item: Dictionary) -> float:
 	var text_width: float = _font_of(item).get_string_size(item["text"], HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, TextServer.JUSTIFICATION_NONE, label_direction(item["text"])).x
