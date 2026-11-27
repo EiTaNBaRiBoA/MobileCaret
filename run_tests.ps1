@@ -12,7 +12,7 @@ runs its checks, so its suite could otherwise still say "0 failures".
 
   .\run_tests.ps1                   every suite
   .\run_tests.ps1 -Suite toolbar    one suite: scripts, custom, toolbar, carets, multicaret, bidi,
-                                    setups, viewports, focus
+                                    setups, viewports, focus, keyboard
 
 Godot: -Godot <path> or the GODOT environment variable; defaults to the 4.7.2 build next to the
 projects folder.
@@ -129,7 +129,7 @@ if ($Suite -eq "all" -or $Suite -eq "scripts") {
 }
 
 # 4. Test scenes (in a window).
-$scenes = @("custom", "toolbar", "carets", "multicaret", "bidi", "setups", "viewports", "focus")
+$scenes = @("custom", "toolbar", "carets", "multicaret", "bidi", "setups", "viewports", "focus", "keyboard")
 foreach ($name in $scenes) {
 	if ($Suite -ne "all" -and $Suite -ne $name) { continue }
 	Write-Step "Suite: $name"

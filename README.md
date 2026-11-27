@@ -42,6 +42,7 @@ The optional floating Cut / Copy / Paste / Select all toolbar:
 * **A menu for each control:** switch the menu off for one control, or choose which buttons it may have (only Copy for a note, Copy / Cut / Delete for a field), from code.
 * **Menus on images:** a long press on an image (or any control without text) opens the toolbar with a built-in **Copy image** (Android and Windows, from GDScript only) and the buttons you give it, such as "Save image". It stays away from the spots of an interactive view (a slider, a node) that answer `is_interactive_at()`. On a view that draws its own text and makes it selectable (a caret delegate with `has_text_at()`), a long press on that text selects it with handles, and its menu has Copy, Select all and ··· with the image's buttons.
 * **Custom controls:** your own text or math editors get the handles and the toolbar too. Return a small delegate object from `_get_caret_delegate()`, with no dependency on MobileCaret, or register an adapter from code (see [Custom controls](#custom-controls)).
+* **Keeping clear of the keyboard (optional):** a small node lifts the controls you choose above the phone's keyboard and the system bars, and scrolls the field being typed in into sight (see [Keeping clear of the keyboard](#keeping-clear-of-the-keyboard)).
 
 ## Installation
 
@@ -328,10 +329,40 @@ caret_text_adapter.register_adapter(factory)
 caret_text_adapter.unregister_adapter(factory)
 ```
 
+## Keeping clear of the keyboard
+
+Godot does not resize the window when the phone's keyboard opens, so the field being typed in and
+the buttons at the bottom end up under it. `caret_keyboard_inset` (optional, in `Shared/`) fixes
+that: add it to the scene and give it the controls to lift. Their `offset_top` and `offset_bottom`
+follow the status bar, the navigation bar (the display's safe area, for an app drawn edge to edge)
+and the keyboard, and the focused text control is scrolled into sight in its nearest
+`ScrollContainer` when the keyboard opens or changes height. On a desktop it does nothing.
+
+```gdscript
+var inset := caret_keyboard_inset.new()
+inset.targets = [screens, overlay]   # anchored to the full rect; empty: the node's parent
+add_child(inset)
+inset.insets_changed.connect(func(top, bottom, keyboard): print(keyboard))
+if inset.is_keyboard_open():         # a text control has the focus and the keyboard is up
+	pass
+```
+
+| Member | Description |
+| --- | --- |
+| `targets` | The controls kept clear of the bars and the keyboard. Empty: the parent, when it is a `Control`. |
+| `use_safe_area` | Also keep clear of the status bar and the navigation bar (default on). |
+| `keep_focus_visible`, `focus_delay` | Scroll the focused field into sight after the keyboard opens or changes height (default on, after 0.05 s). |
+| `only_on_mobile` | Work only on Android and iOS (default on). |
+| `open_grace_ms` | How long the keyboard still counts as open after it closed (default 400 ms): Android may hide it just before a back gesture reaches the app, which should then only close the keyboard. |
+| `insets_changed(top, bottom, keyboard)` | Emitted when any of them changes, in the targets' own units. |
+| `get_keyboard_height()`, `get_safe_insets()`, `get_bottom_lift()`, `get_uncovered_bar()` | The keyboard's height; the safe-area insets; how far the targets end above the bottom edge; the part of the navigation bar the keyboard leaves uncovered (for a sheet that reaches the bottom edge). |
+| `is_keyboard_open()` | A text control (a `LineEdit`, a `TextEdit` or a custom control with a caret delegate) has the focus and the keyboard is up, or was a moment ago. |
+| `simulate_keyboard_height`, `simulate_safe_area` | For tests: a keyboard and bars of these sizes instead of the device's (negative: the device's). |
+
 ## Tests
 
 The test scenes are in [tests](tests): custom controls, the toolbar, carets, several carets,
-right-to-left text, project setups, viewports and focus. They need a window (handles, dragging and
+right-to-left text, project setups, viewports, focus and the keyboard inset. They need a window (handles, dragging and
 the toolbar are checked with real pointer events). One command creates a development project around
 this folder (when there is none), checks that every script compiles under strict typing, and runs
 every scene:
