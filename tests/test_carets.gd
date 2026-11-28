@@ -412,6 +412,33 @@ func _test_long_press() -> void:
 	await _frames(2)
 	_check(edit.has_selection() and edit.get_selected_text() == "handle", "long press selects the word under the finger (got '%s')" % edit.get_selected_text())
 	_check(_visible_handles() == 2, "selection handles shown after long press")
+	# a finger moved on after the long press: a control whose release drops the selection (LineEdit)
+	# still ends with the word
+	edit.deselect()
+	_mouse_move(point)
+	_mouse_button(point, true)
+	await _frames(1)
+	await get_tree().create_timer(_controller.long_press_seconds + 0.25).timeout
+	var further: Vector2 = _text_point(edit, Vector2i(30, 0)) # inside "caret"
+	_mouse_move(point.lerp(further, 0.5))
+	await _frames(1)
+	_mouse_move(further)
+	await _frames(1)
+	_mouse_button(further, false)
+	await _frames(2)
+	_check(edit.has_selection() and edit.get_selected_text().contains("handle"), "a finger moved on after the long press still ends with a selection holding the word (got '%s')" % edit.get_selected_text())
+	# a control that widened the selection while the finger moved on keeps it on release
+	edit.deselect()
+	_mouse_move(point)
+	_mouse_button(point, true)
+	await _frames(1)
+	await get_tree().create_timer(_controller.long_press_seconds + 0.25).timeout
+	edit.select(4, 30) # "handle under the caret", as a control's own drag would widen it
+	_check(_controller._selection_covers_word(), "a selection around the long-pressed word counts as widened")
+	edit.select(11, 30)
+	_check(not _controller._selection_covers_word(), "one that lost part of the word does not")
+	_mouse_button(point, false)
+	await _frames(2)
 
 	var text_edit: TextEdit = _node("TextEdit") as TextEdit
 	var saved_scale_mode: Window.ContentScaleMode = get_window().content_scale_mode

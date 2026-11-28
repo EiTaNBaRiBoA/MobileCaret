@@ -10,7 +10,7 @@ Godot's built-in caret is a thin line that is hard to see and almost impossible 
 
 * **Draggable caret handle:** a handle appears under the caret; drag it to move the caret.
 * **Selection handles:** when text is selected, two handles mark the start and end. Drag either one to adjust the selection, and they can cross over each other.
-* **Long-press to select a word.**
+* **Long-press to select a word.** In a control whose drag widens the selection, moving the finger on after the long press widens it, and lifting the finger keeps the wider selection.
 * **Smooth dragging:** the handle follows your finger while the caret snaps to the nearest character. Dragging past the edge of a control scrolls it. A handle that is pressed but not moved yet stays where it is, and both handles keep pointing outward.
 * **Floating toolbar (optional):** an Android-style Cut / Copy / Paste / Select all bar above the selection. It lives in its own folder, nothing else depends on it, and it can be switched on and off from code.
 * **Auto-fading caret handle:** the single caret handle fades out after a few seconds of inactivity and returns when you tap or move the caret. Selection handles stay visible.

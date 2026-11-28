@@ -107,6 +107,10 @@ var _press_position: Vector2 = Vector2.ZERO
 var _press_time: float = 0.0
 var _long_press_fired: bool = false
 var _long_press_pos: Vector2i = Vector2i.ZERO
+# The word the long press selected (from, to), to tell on release whether the control widened it.
+var _long_press_word: Array[Vector2i] = []
+# The finger moved on (beyond the long-press tolerance) after its long press fired.
+var _moved_after_long_press: bool = false
 
 # Idle tracking for the caret handle fade.
 var _idle_time: float = 0.0
@@ -622,7 +626,8 @@ func _on_control_gui_input(event: InputEvent) -> void:
 		if not button.pressed and _long_press_fired:
 			# The control's own release handling (which runs after this signal) would
 			# collapse the selection, so apply it again once that is done.
-			_reapply_long_press_selection.call_deferred()
+			# (whether the finger moved on is read now: this release clears it below)
+			_reapply_long_press_selection.call_deferred(_moved_after_long_press)
 		_pressing = button.pressed
 		_press_position = button.position
 		_mark_active()
@@ -631,10 +636,12 @@ func _on_control_gui_input(event: InputEvent) -> void:
 			_long_press_pos = _adapter.get_pos_at_local(button.position)
 		_press_time = 0.0
 		_long_press_fired = false
+		_moved_after_long_press = false
 	elif event is InputEventMouseMotion and _pressing:
 		var motion: InputEventMouseMotion = event
 		if motion.position.distance_to(_press_position) > LONG_PRESS_TOLERANCE * _active.ui_scale:
 			_pressing = false
+			_moved_after_long_press = _long_press_fired
 
 func _update_long_press(delta: float) -> void:
 	if not _pressing or _long_press_fired or long_press_seconds <= 0.0 or _drag_handle != null:
@@ -643,9 +650,30 @@ func _update_long_press(delta: float) -> void:
 	if _press_time >= long_press_seconds:
 		_long_press_fired = true
 		_adapter.select_word_at(_long_press_pos)
+		_long_press_word.clear()
+		if _adapter.has_selection():
+			_long_press_word.append(_adapter.get_selection_from())
+			_long_press_word.append(_adapter.get_selection_to())
 
-func _reapply_long_press_selection() -> void:
+func _reapply_long_press_selection(moved_on: bool) -> void:
 	if _adapter != null and _adapter.is_valid() and _drag_handle == null:
+		# A control that widened the selection while the finger moved on after the long press (its
+		# own drag) keeps it; one whose release collapsed it, or that changed it while the finger
+		# stayed still (TextEdit's click-hold), gets the word again.
+		if moved_on and _selection_covers_word():
+			return
 		_adapter.select_word_at(_long_press_pos)
+
+# Whether the control's selection still holds the whole long-pressed word.
+func _selection_covers_word() -> bool:
+	if _long_press_word.size() != 2 or not _adapter.has_selection():
+		return false
+	var from: Vector2i = _adapter.get_selection_from()
+	var to: Vector2i = _adapter.get_selection_to()
+	return _pos_before_or_at(from, _long_press_word[0]) and _pos_before_or_at(_long_press_word[1], to)
+
+# (column, line) positions in text order.
+static func _pos_before_or_at(a: Vector2i, b: Vector2i) -> bool:
+	return a.y < b.y or (a.y == b.y and a.x <= b.x)
 
 #endregion
